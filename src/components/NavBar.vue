@@ -1,9 +1,9 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
-import { getApiUrl, API_PATHS } from '../api/config';
-import { checkLoginStatus, login as authLogin, logout as authLogout } from '../utils/auth';
+import { getApiUrl, API_PATHS, CookieUtil } from '../api/config';
+import { useUserStore } from '../stores/user';
 
 // 导入图标
 import userIcon from '../assets/用户.png';
@@ -27,14 +27,18 @@ const vClickOutside = {
 };
 
 const router = useRouter();
+const userStore = useUserStore();
 const searchQuery = ref('');
-const isLoggedIn = ref(false);
 const showLoginModal = ref(false);
 const showRegisterModal = ref(false);
 const showSearchSuggestions = ref(false);
 const searchHistory = ref([]);
 const movieRankings = ref([]);
-const userId = ref(null);
+
+// 使用计算属性从store获取登录状态
+const isLoggedIn = computed(() => userStore.isLoggedIn);
+const userId = computed(() => userStore.userId);
+
 const username = ref('');
 const email = ref('');
 const password = ref('');
@@ -44,45 +48,12 @@ const loginError = ref('');
 const registerError = ref('');
 const showUserMenu = ref(false);
 
-// 组件挂载时检查登录状态
+// NavBar组件挂载时的操作
 onMounted(async () => {
-  // 使用 auth.js 中的工具检查登录状态
-  const { isLoggedIn: loggedIn, userId: uid } = await checkLoginStatus();
-  isLoggedIn.value = loggedIn;
-  userId.value = uid;
-  
-  console.log('NavBar - 组件挂载时的登录状态:', { isLoggedIn: isLoggedIn.value, userId: userId.value });
-  
-  // 创建定时器检查Cookie变化
-  const cookieCheckInterval = setInterval(() => {
-    const currentToken = getCookie('token');
-    const currentUserId = getCookie('userId');
-    
-    // 只有在状态变化时才更新
-    const newLoginState = Boolean(currentToken && currentUserId);
-    if (newLoginState !== isLoggedIn.value) {
-      console.log('NavBar - Cookie状态变化检测:', { newLoginState });
-      
-      if (newLoginState) {
-        isLoggedIn.value = true;
-        userId.value = currentUserId;
-      } else {
-        isLoggedIn.value = false;
-        userId.value = null;
-      }
-    }
-  }, 2000); // 每2秒检查一次
-  
-  // 将间隔器ID存储在全局对象中以便在卸载时清除
-  window.navbarCookieInterval = cookieCheckInterval;
-});
-
-// 清理定时器
-onUnmounted(() => {
-  if (window.navbarCookieInterval) {
-    clearInterval(window.navbarCookieInterval);
-    console.log('NavBar - 清除Cookie检查定时器');
-  }
+  console.log('NavBar组件挂载 - 当前登录状态:', { 
+    isLoggedIn: userStore.isLoggedIn, 
+    userId: userStore.userId 
+  });
 });
 
 // 获取搜索历史
@@ -90,7 +61,7 @@ const fetchSearchHistory = async () => {
   if (!isLoggedIn.value || !userId.value) return;
   
   try {
-    const token = getCookie('token');
+    const token = CookieUtil.getCookie('token');
     // 打印调试信息
     console.log('获取搜索历史，userId:', userId.value);
     
@@ -140,7 +111,7 @@ const addSearchHistory = async (query) => {
   if (!isLoggedIn.value || !userId.value) return;
   
   try {
-    const token = localStorage.getItem('token');
+    const token = CookieUtil.getCookie('token');
     await axios.post(getApiUrl(API_PATHS.SEARCH.HISTORY), {
       user_id: userId.value,
       search_query: query
@@ -155,7 +126,7 @@ const addSearchHistory = async (query) => {
 // 删除搜索历史
 const deleteSearchHistory = async (historyId) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = CookieUtil.getCookie('token');
     await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/${historyId}`), {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -219,12 +190,9 @@ const handleLogin = async () => {
     }
     
     console.log('开始登录请求', { username: username.value });
-    const result = await authLogin(username.value, password.value, rememberMe.value);
+    const result = await userStore.login(username.value, password.value, rememberMe.value);
 
     if (result.success) {
-      // 更新组件状态
-      isLoggedIn.value = true;
-      userId.value = result.userId;
       showLoginModal.value = false;
       username.value = '';
       password.value = '';
@@ -240,9 +208,7 @@ const handleLogin = async () => {
 };
 
 const handleLogout = () => {
-  authLogout();
-  isLoggedIn.value = false;
-  userId.value = null;
+  userStore.logout();
   showUserMenu.value = false;
   router.push('/');
 };
@@ -377,7 +343,7 @@ const clearAllSearchHistory = async () => {
   if (!isLoggedIn.value || !userId.value) return;
   
   try {
-    const token = localStorage.getItem('token');
+    const token = CookieUtil.getCookie('token');
     // 先尝试调用后端接口清空
     try {
       await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/clear`), {

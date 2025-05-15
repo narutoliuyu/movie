@@ -1,5 +1,29 @@
 <script setup>
+import { onMounted, onUnmounted } from 'vue'
+import { useUserStore } from './stores/user'
 
+const userStore = useUserStore()
+
+// 在页面可见性变化时检查登录状态
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    console.log('页面变为可见，重新检查登录状态')
+    userStore.initializeState()
+  }
+}
+
+// 组件挂载时初始化用户状态
+onMounted(async () => {
+  await userStore.initializeState()
+  
+  // 添加页面可见性变化事件监听器
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+// 清理事件监听器
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 </script>
 
 <template>
