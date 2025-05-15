@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import SearchView from '../views/SearchView.vue'
 import MovieDetail from '../views/MovieDetail.vue'
 import CenterView from '../views/CenterView.vue'
+import HistoryView from '../views/HistoryView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -26,6 +27,11 @@ const router = createRouter({
       path: '/center',
       name: 'center',
       component: CenterView
+    },
+    {
+      path: '/history',
+      name: 'history',
+      component: HistoryView
     }
   ]
 })

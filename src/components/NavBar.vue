@@ -451,7 +451,7 @@ const clearAllSearchHistory = async () => {
               <img :src="vipIcon" alt="VIP" class="menu-icon" />
               <span>VIP会员</span>
             </div>
-            <div class="menu-item" @click="handleMenuClick('history')">
+            <div class="menu-item" @click="router.push('/history')">
               <img :src="historyIcon" alt="历史记录" class="menu-icon" />
               <span>观看历史</span>
             </div>

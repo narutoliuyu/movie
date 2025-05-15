@@ -3,11 +3,13 @@ import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import NavBar from '../components/NavBar.vue';
-import { getApiUrl, API_PATHS, API_CONFIG } from '../api/config';
-import videoUrl from '../assets/video.mp4';
+import { getApiUrl, API_PATHS, API_CONFIG, CookieUtil } from '../api/config';
+import { useUserStore } from '../stores/user';
+import videoUrl from '../assets/video1.mp4';
 
 const route = useRoute();
 const router = useRouter();
+const userStore = useUserStore();
 const movie = ref(null);
 const loading = ref(true);
 const error = ref('');
@@ -42,11 +44,81 @@ const fetchMovieDetails = async () => {
   }
 };
 
+// 添加到观看历史
+const addToWatchHistory = async () => {
+  if (!movie.value) return;
+  
+  // 准备观看历史数据
+  const historyItem = {
+    id: Date.now(), // 本地唯一ID
+    movie_id: movie.value.id,
+    user_id: userStore.userId || 'guest',
+    title: movie.value.title,
+    poster_url: movie.value.poster_url,
+    description: movie.value.description,
+    watch_time: new Date().toISOString()
+  };
+  
+  // 如果用户已登录，尝试保存到后端
+  if (userStore.isLoggedIn && userStore.userId) {
+    try {
+      const token = CookieUtil.getCookie('token');
+      await axios.post(getApiUrl('/api/history'), historyItem, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => {
+        console.log('后端API可能不存在，使用本地存储', err);
+        saveToLocalStorage(historyItem);
+      });
+    } catch (err) {
+      console.error('保存观看历史失败:', err);
+      // 即使后端保存失败，也保存到本地
+      saveToLocalStorage(historyItem);
+    }
+  } else {
+    // 未登录用户保存到本地
+    saveToLocalStorage(historyItem);
+  }
+};
+
+// 保存到本地存储
+const saveToLocalStorage = (historyItem) => {
+  try {
+    // 获取现有历史
+    let history = [];
+    const savedHistory = localStorage.getItem('watchHistory');
+    if (savedHistory) {
+      history = JSON.parse(savedHistory);
+    }
+    
+    // 检查是否已存在相同电影，如果存在则更新时间
+    const index = history.findIndex(item => item.movie_id === historyItem.movie_id);
+    if (index !== -1) {
+      history[index] = historyItem;
+    } else {
+      history.unshift(historyItem); // 新的历史记录放在最前面
+    }
+    
+    // 限制历史记录数量为50条
+    if (history.length > 50) {
+      history = history.slice(0, 50);
+    }
+    
+    // 保存到本地存储
+    localStorage.setItem('watchHistory', JSON.stringify(history));
+    console.log('已保存到本地观看历史');
+  } catch (err) {
+    console.error('保存到本地存储失败:', err);
+  }
+};
+
 const goBack = () => {
   router.back();
 };
 
-const playVideo = () => {
+const playVideo = async () => {
+  // 先保存到观看历史
+  await addToWatchHistory();
+  // 然后显示视频播放器
   showVideo.value = true;
 };
 
