@@ -2,7 +2,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
-import { getApiUrl, API_PATHS } from '../api/config';
+import { getApiUrl, API_PATHS, CookieUtil } from '../api/config';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,7 +19,7 @@ const userId = ref(null);
 
 // 在组件挂载时检查登录状态
 onMounted(async () => {
-  const token = localStorage.getItem('token');
+  const token = CookieUtil.getCookie('token');
   if (token) {
     try {
       const response = await axios.get(getApiUrl('/api/user/profile'), {
@@ -27,10 +27,10 @@ onMounted(async () => {
       });
       if (response.data.status === 'success') {
         isLoggedIn.value = true;
-        userId.value = response.data.data.id || localStorage.getItem('userId');
+        userId.value = response.data.data.id || CookieUtil.getCookie('userId');
       }
     } catch (error) {
-      localStorage.removeItem('token');
+      CookieUtil.deleteCookie('token');
     }
   }
 });
@@ -60,7 +60,7 @@ const fetchSearchHistory = async () => {
   if (!isLoggedIn.value || !userId.value) return;
   
   try {
-    const token = localStorage.getItem('token');
+    const token = CookieUtil.getCookie('token');
     const response = await axios.get(getApiUrl(API_PATHS.SEARCH.HISTORY), {
       headers: { Authorization: `Bearer ${token}` },
       params: { user_id: userId.value }
@@ -94,7 +94,7 @@ const addSearchHistory = async (query) => {
   if (!isLoggedIn.value || !userId.value) return;
   
   try {
-    const token = localStorage.getItem('token');
+    const token = CookieUtil.getCookie('token');
     await axios.post(getApiUrl(API_PATHS.SEARCH.HISTORY), {
       user_id: userId.value,
       search_query: query
@@ -109,7 +109,7 @@ const addSearchHistory = async (query) => {
 // 删除搜索历史
 const deleteSearchHistory = async (historyId) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = CookieUtil.getCookie('token');
     await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/${historyId}`), {
       headers: { Authorization: `Bearer ${token}` }
     });

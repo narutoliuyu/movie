@@ -2,6 +2,37 @@ import axios from 'axios';
 // API基础配置
 const API_BASE_URL = '';  // 保持为空，由vite代理处理
 
+// Cookie工具函数
+const CookieUtil = {
+  // 设置Cookie
+  setCookie(name, value, days) {
+    let expires = '';
+    if (days) {
+      const date = new Date();
+      date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+      expires = '; expires=' + date.toUTCString();
+    }
+    document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/';
+  },
+
+  // 获取Cookie
+  getCookie(name) {
+    const nameEQ = name + '=';
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+      if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+    }
+    return null;
+  },
+
+  // 删除Cookie
+  deleteCookie(name) {
+    this.setCookie(name, '', -1);
+  }
+};
+
 // API路径
 const API_PATHS = {
   CATEGORIES: '/api/categories',  // 确保路径正确
@@ -15,20 +46,27 @@ const API_PATHS = {
     LOGIN: '/api/auth/login',
     REGISTER: '/api/auth/register',
     PROFILE: '/api/auth/profile'
+  },
+  SEARCH: {
+    HISTORY: '/api/search/history',
+    RANKINGS: '/api/search/rankings'
+  },
+  USER: {
+    PROFILE: '/api/user/profile'
   }
 };
 
 // 获取存储的token
 const getToken = () => {
-  return localStorage.getItem('token');
+  return CookieUtil.getCookie('token');
 };
 
 // 设置token
-const setToken = (token) => {
+const setToken = (token, rememberMe = false) => {
   if (token) {
-    localStorage.setItem('token', token);
+    CookieUtil.setCookie('token', token, rememberMe ? 7 : null);
   } else {
-    localStorage.removeItem('token');
+    CookieUtil.deleteCookie('token');
   }
 };
 
@@ -99,5 +137,6 @@ export {
   handleApiError,
   axiosInstance,
   getToken,
-  setToken
+  setToken,
+  CookieUtil
 }; 

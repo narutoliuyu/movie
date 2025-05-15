@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { getApiUrl, API_PATHS } from '../api/config';
+import { checkLoginStatus, login as authLogin, logout as authLogout } from '../utils/auth';
 
 // 导入图标
 import userIcon from '../assets/用户.png';
@@ -43,23 +44,44 @@ const loginError = ref('');
 const registerError = ref('');
 const showUserMenu = ref(false);
 
-// 检查是否已登录
+// 组件挂载时检查登录状态
 onMounted(async () => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    try {
-      const response = await axios.get(getApiUrl(API_PATHS.USER.PROFILE), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (response.data.status === 'success') {
+  // 使用 auth.js 中的工具检查登录状态
+  const { isLoggedIn: loggedIn, userId: uid } = await checkLoginStatus();
+  isLoggedIn.value = loggedIn;
+  userId.value = uid;
+  
+  console.log('NavBar - 组件挂载时的登录状态:', { isLoggedIn: isLoggedIn.value, userId: userId.value });
+  
+  // 创建定时器检查Cookie变化
+  const cookieCheckInterval = setInterval(() => {
+    const currentToken = getCookie('token');
+    const currentUserId = getCookie('userId');
+    
+    // 只有在状态变化时才更新
+    const newLoginState = Boolean(currentToken && currentUserId);
+    if (newLoginState !== isLoggedIn.value) {
+      console.log('NavBar - Cookie状态变化检测:', { newLoginState });
+      
+      if (newLoginState) {
         isLoggedIn.value = true;
-        userId.value = response.data.data.id;
-        localStorage.setItem('userId', userId.value);
+        userId.value = currentUserId;
+      } else {
+        isLoggedIn.value = false;
+        userId.value = null;
       }
-    } catch (error) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('userId');
     }
+  }, 2000); // 每2秒检查一次
+  
+  // 将间隔器ID存储在全局对象中以便在卸载时清除
+  window.navbarCookieInterval = cookieCheckInterval;
+});
+
+// 清理定时器
+onUnmounted(() => {
+  if (window.navbarCookieInterval) {
+    clearInterval(window.navbarCookieInterval);
+    console.log('NavBar - 清除Cookie检查定时器');
   }
 });
 
@@ -68,30 +90,48 @@ const fetchSearchHistory = async () => {
   if (!isLoggedIn.value || !userId.value) return;
   
   try {
-    const token = localStorage.getItem('token');
+    const token = getCookie('token');
+    // 打印调试信息
+    console.log('获取搜索历史，userId:', userId.value);
+    
     const response = await axios.get(getApiUrl(API_PATHS.SEARCH.HISTORY), {
       headers: { Authorization: `Bearer ${token}` },
       params: { user_id: userId.value }
     });
+    
     console.log('搜索历史响应:', response.data);
+    
     if (response.data.status === 'success') {
       searchHistory.value = response.data.data;
+      console.log('搜索历史数据:', searchHistory.value);
     }
   } catch (error) {
     console.error('获取搜索历史失败:', error);
+    if (error.response) {
+      console.error('错误响应:', error.response.data);
+    }
   }
 };
 
 // 获取电影排行榜
 const fetchMovieRankings = async () => {
   try {
+    // 打印调试信息
+    console.log('获取电影排行榜');
+    
     const response = await axios.get(getApiUrl(API_PATHS.SEARCH.RANKINGS));
+    
     console.log('电影排行榜响应:', response.data);
+    
     if (response.data.status === 'success') {
       movieRankings.value = response.data.data;
+      console.log('电影排行榜数据:', movieRankings.value);
     }
   } catch (error) {
     console.error('获取电影排行榜失败:', error);
+    if (error.response) {
+      console.error('错误响应:', error.response.data);
+    }
   }
 };
 
@@ -178,34 +218,33 @@ const handleLogin = async () => {
       return;
     }
     
-    const response = await axios.post(getApiUrl(API_PATHS.AUTH.LOGIN), {
-      username: username.value,
-      password: password.value
-    });
+    console.log('开始登录请求', { username: username.value });
+    const result = await authLogin(username.value, password.value, rememberMe.value);
 
-    if (response.data.status === 'success') {
-      const { token } = response.data.data;
-      localStorage.setItem('token', token);
-      if (rememberMe.value) {
-        localStorage.setItem('rememberMe', 'true');
-        localStorage.setItem('loginTime', new Date().getTime().toString());
-      }
+    if (result.success) {
+      // 更新组件状态
       isLoggedIn.value = true;
+      userId.value = result.userId;
       showLoginModal.value = false;
       username.value = '';
       password.value = '';
+      
+      console.log('登录成功，用户ID:', result.userId);
+    } else {
+      loginError.value = result.message;
     }
   } catch (error) {
-    loginError.value = error.response?.data?.message || '登录失败，请检查用户名和密码';
+    console.error('登录请求失败:', error);
+    loginError.value = '登录过程中出现错误，请稍后重试';
   }
 };
 
 const handleLogout = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('rememberMe');
-  localStorage.removeItem('loginTime');
+  authLogout();
   isLoggedIn.value = false;
+  userId.value = null;
   showUserMenu.value = false;
+  router.push('/');
 };
 
 const goToHome = () => {
@@ -278,21 +317,13 @@ const handleRegister = async () => {
       // 注册成功后自动登录
       console.log('注册成功，开始自动登录');
       
-      const loginResponse = await axios.post(getApiUrl(API_PATHS.AUTH.LOGIN), {
-        username: username.value,
-        password: password.value
-      });
-
-      console.log('自动登录响应:', loginResponse.data);
-
-      if (loginResponse.data.status === 'success') {
-        const { token } = loginResponse.data.data;
-        localStorage.setItem('token', token);
-        if (rememberMe.value) {
-          localStorage.setItem('rememberMe', 'true');
-          localStorage.setItem('loginTime', new Date().getTime().toString());
-        }
+      // 使用auth.js中的登录函数，确保使用Cookie存储
+      const result = await authLogin(username.value, password.value, rememberMe.value);
+      
+      if (result.success) {
+        // 更新组件状态
         isLoggedIn.value = true;
+        userId.value = result.userId;
         showRegisterModal.value = false;
         showLoginModal.value = false;
         // 清空表单
@@ -340,6 +371,37 @@ const handleMenuClick = (component) => {
     query: { component }
   });
 };
+
+// 清空所有搜索历史
+const clearAllSearchHistory = async () => {
+  if (!isLoggedIn.value || !userId.value) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    // 先尝试调用后端接口清空
+    try {
+      await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/clear`), {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { user_id: userId.value }
+      });
+    } catch (err) {
+      console.log('后端可能没有清空接口，将单独删除每条记录');
+      // 如果后端没有提供清空接口，则逐个删除
+      const deletePromises = searchHistory.value.map(history => 
+        deleteSearchHistory(history.id)
+      );
+      await Promise.all(deletePromises);
+    }
+    
+    // 无论如何都清空前端显示
+    searchHistory.value = [];
+    console.log('已清空搜索历史');
+  } catch (error) {
+    console.error('清空搜索历史失败:', error);
+    // 至少清空前端显示
+    searchHistory.value = [];
+  }
+};
 </script>
 
 <template>
@@ -366,7 +428,7 @@ const handleMenuClick = (component) => {
         <div v-if="isLoggedIn && searchHistory.length > 0" class="suggestion-section">
           <div class="section-header">
             <h4>搜索历史</h4>
-            <button class="clear-history" @click="searchHistory = []">清空</button>
+            <button class="clear-history" @click="clearAllSearchHistory">清空</button>
           </div>
           <div 
             v-for="history in searchHistory" 
@@ -1003,5 +1065,26 @@ const handleMenuClick = (component) => {
   text-align: center;
   color: #aaa;
   padding: 1rem;
+}
+
+.delete-history {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.suggestion-item:hover .delete-history {
+  opacity: 1;
+}
+
+.delete-history:hover {
+  color: #e94560;
+  background: rgba(233, 69, 96, 0.1);
 }
 </style> 
