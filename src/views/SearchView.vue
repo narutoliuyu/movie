@@ -2,7 +2,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
-import { getApiUrl } from '../api/config';
+import { getApiUrl, API_PATHS } from '../api/config';
 
 const route = useRoute();
 const router = useRouter();
@@ -11,6 +11,29 @@ const loading = ref(true);
 const error = ref('');
 const totalResults = ref(0);
 const searchQuery = ref(route.query.q || '');
+const showSearchSuggestions = ref(false);
+const searchHistory = ref([]);
+const movieRankings = ref([]);
+const isLoggedIn = ref(false);
+const userId = ref(null);
+
+// 在组件挂载时检查登录状态
+onMounted(async () => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      const response = await axios.get(getApiUrl('/api/user/profile'), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.status === 'success') {
+        isLoggedIn.value = true;
+        userId.value = response.data.data.id || localStorage.getItem('userId');
+      }
+    } catch (error) {
+      localStorage.removeItem('token');
+    }
+  }
+});
 
 const fetchMovies = async (query) => {
   try {
@@ -32,16 +55,117 @@ const fetchMovies = async (query) => {
   }
 };
 
+// 获取搜索历史
+const fetchSearchHistory = async () => {
+  if (!isLoggedIn.value || !userId.value) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(getApiUrl(API_PATHS.SEARCH.HISTORY), {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { user_id: userId.value }
+    });
+    
+    if (response.data.status === 'success') {
+      searchHistory.value = response.data.data;
+      console.log('搜索历史:', searchHistory.value);
+    }
+  } catch (error) {
+    console.error('获取搜索历史失败:', error);
+  }
+};
+
+// 获取电影排行榜
+const fetchMovieRankings = async () => {
+  try {
+    const response = await axios.get(getApiUrl(API_PATHS.SEARCH.RANKINGS));
+    
+    if (response.data.status === 'success') {
+      movieRankings.value = response.data.data;
+      console.log('电影排行榜:', movieRankings.value);
+    }
+  } catch (error) {
+    console.error('获取电影排行榜失败:', error);
+  }
+};
+
+// 添加搜索历史
+const addSearchHistory = async (query) => {
+  if (!isLoggedIn.value || !userId.value) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    await axios.post(getApiUrl(API_PATHS.SEARCH.HISTORY), {
+      user_id: userId.value,
+      search_query: query
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch (error) {
+    console.error('添加搜索历史失败:', error);
+  }
+};
+
+// 删除搜索历史
+const deleteSearchHistory = async (historyId) => {
+  try {
+    const token = localStorage.getItem('token');
+    await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/${historyId}`), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    // 重新获取搜索历史
+    await fetchSearchHistory();
+  } catch (error) {
+    console.error('删除搜索历史失败:', error);
+  }
+};
+
+// 处理搜索框焦点
+const handleSearchFocus = async () => {
+  showSearchSuggestions.value = true;
+  await Promise.all([
+    isLoggedIn.value ? fetchSearchHistory() : Promise.resolve(),
+    fetchMovieRankings()
+  ]);
+};
+
+// 处理搜索框失焦
+const handleSearchBlur = () => {
+  setTimeout(() => {
+    showSearchSuggestions.value = false;
+  }, 200);
+};
+
+// 处理搜索建议点击
+const handleSuggestionClick = (query) => {
+  searchQuery.value = query;
+  handleSearch();
+};
+
+// 处理电影点击
+const handleMovieClick = async (movieId, title) => {
+  if (isLoggedIn.value) {
+    await addSearchHistory(title);
+  }
+  router.push(`/movie/${movieId}`);
+  showSearchSuggestions.value = false;
+};
+
 const goToHome = () => {
   router.push('/');
 };
 
-const handleSearch = () => {
+const handleSearch = async () => {
   if (searchQuery.value.trim()) {
+    if (isLoggedIn.value) {
+      await addSearchHistory(searchQuery.value.trim());
+    }
     router.push({
       path: '/search',
       query: { q: searchQuery.value.trim() }
     });
+    showSearchSuggestions.value = false;
   }
 };
 
@@ -71,11 +195,59 @@ watch(
           v-model="searchQuery"
           placeholder="搜索电影、演员、导演..."
           @keyup.enter="handleSearch"
+          @focus="handleSearchFocus"
+          @blur="handleSearchBlur"
           class="search-input"
         />
         <button @click="handleSearch" class="search-button">
           搜索
         </button>
+        
+        <!-- 搜索建议下拉框 -->
+        <div v-if="showSearchSuggestions" class="search-suggestions">
+          <!-- 搜索历史 -->
+          <div v-if="isLoggedIn && searchHistory.length > 0" class="suggestion-section">
+            <div class="section-header">
+              <h4>搜索历史</h4>
+              <button class="clear-history" @click="searchHistory = []">清空</button>
+            </div>
+            <div 
+              v-for="history in searchHistory" 
+              :key="history.id"
+              class="suggestion-item"
+            >
+              <div class="suggestion-content" @click="handleSuggestionClick(history.search_query)">
+                <span class="history-icon">⟲</span>
+                <span>{{ history.search_query }}</span>
+              </div>
+              <button 
+                class="delete-history"
+                @click.stop="deleteSearchHistory(history.id)"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+          
+          <!-- 电影排行榜 -->
+          <div v-if="movieRankings.length > 0" class="suggestion-section">
+            <h4>热门电影</h4>
+            <div 
+              v-for="ranking in movieRankings" 
+              :key="ranking.id"
+              class="suggestion-item"
+              @click="handleMovieClick(ranking.movie_id, ranking.movie.title)"
+            >
+              <span class="rank-number">{{ ranking.rank }}</span>
+              <span>{{ ranking.movie.title }}</span>
+            </div>
+          </div>
+
+          <!-- 无数据提示 -->
+          <div v-if="(!isLoggedIn || searchHistory.length === 0) && movieRankings.length === 0" class="no-data">
+            暂无数据
+          </div>
+        </div>
       </div>
     </div>
 
@@ -181,6 +353,7 @@ watch(
   gap: 1rem;
   max-width: 600px;
   margin: 0 auto;
+  position: relative;
 }
 
 .search-input {
@@ -362,6 +535,118 @@ watch(
 .year, .genres {
   margin: 0.25rem 0;
   color: #888;
+  font-size: 0.9rem;
+}
+
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #16213e;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  margin-top: 8px;
+  padding: 12px;
+  z-index: 1000;
+}
+
+.suggestion-section {
+  margin-bottom: 16px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.section-header h4 {
+  color: #aaa;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.clear-history {
+  background: none;
+  border: none;
+  color: #e94560;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.clear-history:hover {
+  background: rgba(233, 69, 96, 0.1);
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.suggestion-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.suggestion-item:hover {
+  background: rgba(233, 69, 96, 0.1);
+}
+
+.history-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  color: #aaa;
+}
+
+.delete-history {
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 4px 8px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.suggestion-item:hover .delete-history {
+  opacity: 1;
+}
+
+.delete-history:hover {
+  color: #e94560;
+  background: rgba(233, 69, 96, 0.1);
+}
+
+.rank-number {
+  width: 20px;
+  height: 20px;
+  background: #e94560;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  margin-right: 8px;
+}
+
+.no-data {
+  padding: 12px;
+  text-align: center;
+  color: #aaa;
   font-size: 0.9rem;
 }
 

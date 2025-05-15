@@ -30,6 +30,10 @@ const searchQuery = ref('');
 const isLoggedIn = ref(false);
 const showLoginModal = ref(false);
 const showRegisterModal = ref(false);
+const showSearchSuggestions = ref(false);
+const searchHistory = ref([]);
+const movieRankings = ref([]);
+const userId = ref(null);
 const username = ref('');
 const email = ref('');
 const password = ref('');
@@ -49,19 +53,120 @@ onMounted(async () => {
       });
       if (response.data.status === 'success') {
         isLoggedIn.value = true;
+        userId.value = response.data.data.id;
+        localStorage.setItem('userId', userId.value);
       }
     } catch (error) {
       localStorage.removeItem('token');
+      localStorage.removeItem('userId');
     }
   }
 });
 
-const handleSearch = () => {
+// 获取搜索历史
+const fetchSearchHistory = async () => {
+  if (!isLoggedIn.value || !userId.value) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    const response = await axios.get(getApiUrl(API_PATHS.SEARCH.HISTORY), {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { user_id: userId.value }
+    });
+    console.log('搜索历史响应:', response.data);
+    if (response.data.status === 'success') {
+      searchHistory.value = response.data.data;
+    }
+  } catch (error) {
+    console.error('获取搜索历史失败:', error);
+  }
+};
+
+// 获取电影排行榜
+const fetchMovieRankings = async () => {
+  try {
+    const response = await axios.get(getApiUrl(API_PATHS.SEARCH.RANKINGS));
+    console.log('电影排行榜响应:', response.data);
+    if (response.data.status === 'success') {
+      movieRankings.value = response.data.data;
+    }
+  } catch (error) {
+    console.error('获取电影排行榜失败:', error);
+  }
+};
+
+// 添加搜索历史
+const addSearchHistory = async (query) => {
+  if (!isLoggedIn.value || !userId.value) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    await axios.post(getApiUrl(API_PATHS.SEARCH.HISTORY), {
+      user_id: userId.value,
+      search_query: query
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  } catch (error) {
+    console.error('添加搜索历史失败:', error);
+  }
+};
+
+// 删除搜索历史
+const deleteSearchHistory = async (historyId) => {
+  try {
+    const token = localStorage.getItem('token');
+    await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/${historyId}`), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    await fetchSearchHistory(); // 重新获取搜索历史
+  } catch (error) {
+    console.error('删除搜索历史失败:', error);
+  }
+};
+
+// 监听搜索框焦点
+const handleSearchFocus = async () => {
+  console.log('搜索框获得焦点');
+  showSearchSuggestions.value = true;
+  if (isLoggedIn.value) {
+    await fetchSearchHistory();
+  }
+  await fetchMovieRankings();
+};
+
+// 监听搜索框失焦
+const handleSearchBlur = () => {
+  setTimeout(() => {
+    showSearchSuggestions.value = false;
+  }, 200);
+};
+
+// 处理搜索建议点击
+const handleSuggestionClick = (query) => {
+  searchQuery.value = query;
+  handleSearch();
+};
+
+// 处理电影点击
+const handleMovieClick = async (movieId, title) => {
+  if (isLoggedIn.value) {
+    await addSearchHistory(title);
+  }
+  router.push(`/movie/${movieId}`);
+  showSearchSuggestions.value = false;
+};
+
+const handleSearch = async () => {
   if (searchQuery.value.trim()) {
+    if (isLoggedIn.value && userId.value) {
+      await addSearchHistory(searchQuery.value.trim());
+    }
     router.push({
       path: '/search',
       query: { q: searchQuery.value.trim() }
     });
+    showSearchSuggestions.value = false;
   }
 };
 
@@ -250,8 +355,56 @@ const handleMenuClick = (component) => {
         v-model="searchQuery" 
         placeholder="搜索电影、演员、导演..." 
         class="search-input"
+        @focus="handleSearchFocus"
+        @blur="handleSearchBlur"
       />
       <button @click="handleSearch" class="search-button">搜索</button>
+      
+      <!-- 搜索建议下拉框 -->
+      <div v-if="showSearchSuggestions" class="search-suggestions">
+        <!-- 搜索历史 -->
+        <div v-if="isLoggedIn && searchHistory.length > 0" class="suggestion-section">
+          <div class="section-header">
+            <h4>搜索历史</h4>
+            <button class="clear-history" @click="searchHistory = []">清空</button>
+          </div>
+          <div 
+            v-for="history in searchHistory" 
+            :key="history.id"
+            class="suggestion-item"
+          >
+            <div class="suggestion-content" @click="handleSuggestionClick(history.search_query)">
+              <img src="../assets/历史记录.png" alt="历史" class="suggestion-icon" />
+              <span>{{ history.search_query }}</span>
+            </div>
+            <button 
+              class="delete-history"
+              @click.stop="deleteSearchHistory(history.id)"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        
+        <!-- 电影排行榜 -->
+        <div v-if="movieRankings.length > 0" class="suggestion-section">
+          <h4>热门电影</h4>
+          <div 
+            v-for="ranking in movieRankings" 
+            :key="ranking.id"
+            class="suggestion-item"
+            @click="handleMovieClick(ranking.movie_id, ranking.movie.title)"
+          >
+            <span class="rank-number">{{ ranking.rank }}</span>
+            <span>{{ ranking.movie.title }}</span>
+          </div>
+        </div>
+
+        <!-- 无数据提示 -->
+        <div v-if="(!isLoggedIn || searchHistory.length === 0) && movieRankings.length === 0" class="no-data">
+          暂无数据
+        </div>
+      </div>
     </div>
     
     <div class="user-actions">
@@ -460,7 +613,7 @@ const handleMenuClick = (component) => {
   display: flex;
   position: relative;
   border-radius: 25px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   background: #16213e;
@@ -774,5 +927,81 @@ const handleMenuClick = (component) => {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* 搜索建议下拉框样式 */
+.search-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: #1a1a2e;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  margin-top: 8px;
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.suggestion-section {
+  margin-bottom: 1rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #e94560;
+}
+
+.clear-history {
+  background: none;
+  border: none;
+  color: #e94560;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  color: white;
+}
+
+.suggestion-item:hover {
+  background-color: rgba(233, 69, 96, 0.1);
+}
+
+.suggestion-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.suggestion-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.rank-number {
+  font-size: 0.875rem;
+  font-weight: bold;
+  margin-right: 0.5rem;
+}
+
+.no-data {
+  text-align: center;
+  color: #aaa;
+  padding: 1rem;
 }
 </style> 
