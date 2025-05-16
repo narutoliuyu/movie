@@ -220,7 +220,7 @@ onMounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #0f1129;
+  background-color: #0c0e22;
   overflow: hidden;
 }
 
@@ -236,8 +236,10 @@ onMounted(() => {
   min-width: 220px;
   height: 100%;
   flex-shrink: 0;
-  background-color: #171a31;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #111431;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  z-index: 10;
 }
 
 .main-content {
@@ -246,6 +248,22 @@ onMounted(() => {
   flex-direction: column;
   padding: 20px;
   overflow-y: auto;
+  background: linear-gradient(135deg, #0e102a 0%, #0c0e22 100%);
+  scrollbar-width: thin;
+  scrollbar-color: #e94560 #171a31;
+}
+
+.main-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background: #171a31;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background: #e94560;
+  border-radius: 10px;
 }
 
 .carousel-section {
@@ -260,13 +278,24 @@ onMounted(() => {
 .movies-section {
   padding: 20px;
   width: 100%;
+  position: relative;
+}
+
+.movies-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 5%;
+  width: 90%;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(233, 69, 96, 0.3), transparent);
 }
 
 .movies-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  padding: 20px 0;
+  gap: 30px;
+  padding: 30px 10px;
 }
 
 .loading-state,
@@ -283,11 +312,11 @@ onMounted(() => {
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid rgba(255, 255, 255, 0.3);
+  border: 3px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
   border-top-color: #e94560;
-  animation: spin 1s linear infinite;
-  margin-bottom: 10px;
+  animation: spin 1s cubic-bezier(0.17, 0.67, 0.83, 0.67) infinite;
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -299,18 +328,22 @@ onMounted(() => {
 }
 
 .retry-button {
-  margin-top: 10px;
-  padding: 8px 16px;
-  background-color: #e94560;
+  margin-top: 15px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #e94560, #c23758);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 30px;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
 .retry-button:hover {
-  background-color: #d03651;
+  background: linear-gradient(135deg, #e94560, #aa2a49);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(233, 69, 96, 0.5);
 }
 
 .empty-state {
@@ -325,87 +358,29 @@ onMounted(() => {
 .empty-state p {
   margin-bottom: 15px;
   font-size: 16px;
-}
-
-.movie-card {
-  width: 200px;
-  margin: 0 12px 24px;
-  background-color: #171a31;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.movie-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
-}
-
-.poster-container {
-  position: relative;
-  overflow: hidden;
-  height: 300px;
-}
-
-.movie-poster {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.5s ease;
-}
-
-.movie-card:hover .movie-poster {
-  transform: scale(1.05);
-}
-
-.movie-rating {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background-color: #e94560;
-  color: white;
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.movie-info {
-  padding: 12px;
-  background-color: #171a31;
-}
-
-.movie-title {
-  font-size: 1rem;
-  margin: 0 0 6px;
-  color: white;
-  font-weight: bold;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.movie-director {
-  font-size: 0.8rem;
-  margin: 0;
   color: #b9bad3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+/* 移除这些样式，因为它们与 MovieCard 组件中定义的冲突 */
+.movie-card,
+.movie-card:hover,
+.poster-container,
+.movie-poster,
+.movie-card:hover .movie-poster,
+.movie-rating,
+.movie-info,
+.movie-title,
+.movie-director {
+  all: unset;
 }
 
 .debug-info {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
   padding: 15px;
   border-radius: 8px;
   margin-bottom: 20px;
-  color: white;
+  color: #b9bad3;
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
 }
 
 .debug-info p {

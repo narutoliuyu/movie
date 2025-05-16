@@ -190,12 +190,15 @@ const handleCategoryClick = (categoryId) => {
 }
 
 .category-item:hover {
-  background-color: rgba(233, 69, 96, 0.1);
-  transform: translateX(4px);
+  transform: translateX(0);
+}
+
+.category-item:hover::before {
+  transform: scaleY(0.6);
 }
 
 .category-item.active {
-  background-color: rgba(233, 69, 96, 0.15);
+  /* 移除背景色 */
 }
 
 .category-item.active::before {
@@ -206,23 +209,34 @@ const handleCategoryClick = (categoryId) => {
   width: 24px;
   height: 24px;
   margin-right: 12px;
-  transition: transform 0.3s ease;
+  transition: all 0.3s ease;
 }
 
-.category-item:hover .category-icon {
-  transform: scale(1.1);
+.category-item:hover .category-icon,
+.category-item:hover .category-name {
+  transform: scale(1.15) translateX(4px);
+}
+
+.category-item.active .category-icon {
+  transform: scale(1.2) translateX(4px);
+  filter: brightness(1.2);
 }
 
 .category-name {
   color: #b9bad3;
   font-size: 15px;
   font-weight: 500;
-  transition: color 0.3s ease;
+  transition: all 0.3s ease;
 }
 
 .category-item:hover .category-name,
 .category-item.active .category-name {
   color: #ffffff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+.category-item.active .category-name {
+  transform: scale(1.05) translateX(4px);
 }
 
 /* 添加滑动效果 */

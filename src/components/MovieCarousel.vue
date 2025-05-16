@@ -13,6 +13,7 @@ const showControls = ref(false);
 const retryCount = ref(0);
 const maxRetries = 3;
 let timer = null;
+let autoSlideEnabled = true;
 
 const fetchFeaturedMovies = async () => {
   try {
@@ -88,8 +89,18 @@ const startAutoSlide = () => {
     clearInterval(timer);
   }
   timer = setInterval(() => {
-    nextSlide();
+    if (autoSlideEnabled) {
+      nextSlide();
+    }
   }, 5000);
+};
+
+const pauseAutoSlide = () => {
+  autoSlideEnabled = false;
+};
+
+const resumeAutoSlide = () => {
+  autoSlideEnabled = true;
 };
 
 const goToMovieDetail = (movieId) => {
@@ -107,10 +118,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- 轮播图 -->
   <div 
     class="carousel-container" 
-    @mouseenter="showControls = true" 
-    @mouseleave="showControls = false"
+    @mouseenter="showControls = true; pauseAutoSlide()" 
+    @mouseleave="showControls = false; resumeAutoSlide()"
   >
     <div v-if="loading" class="loading-container">
       <div class="loading-spinner"></div>
@@ -131,35 +143,30 @@ onBeforeUnmount(() => {
           :style="{ backgroundImage: `url(${slide.poster_url})` }"
           @click="goToMovieDetail(slide.id)"
         >
-          <div class="slide-content">
-            <div class="info-container">
-              <h2 class="movie-title">{{ slide.title }}</h2>
-              <div class="movie-meta">
-                <span class="rating">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                  </svg>
-                  {{ slide.rating }}
-                </span>
-              </div>
-              <p class="movie-desc">{{ slide.description }}</p>
-            </div>
-          </div>
         </div>
+      </div>
+      
+      <div class="movie-info-container">
+        <h2 class="movie-title">{{ slides[currentSlide].title }}</h2>
+        <p class="movie-desc">{{ slides[currentSlide].description }}</p>
       </div>
       
       <button 
         v-show="showControls && slides.length > 1" 
         class="carousel-control prev" 
         @click.stop="prevSlide"
-      >&#10094;</button>
+      >
+        <img src="/src/assets/左.png" alt="上一个" class="control-icon" />
+      </button>
       <button 
         v-show="showControls && slides.length > 1" 
         class="carousel-control next" 
         @click.stop="nextSlide"
-      >&#10095;</button>
+      >
+        <img src="/src/assets/右.png" alt="下一个" class="control-icon" />
+      </button>
       
-      <div v-if="slides.length > 1" class="carousel-indicators">
+      <div v-if="slides.length > 1" class="carousel-indicators" :class="{ 'show-indicators': showControls }">
         <button 
           v-for="(slide, index) in slides" 
           :key="slide.id"
@@ -180,6 +187,7 @@ onBeforeUnmount(() => {
   border-radius: 12px;
   background-color: #0f1129;
   box-shadow: 0 5px 25px rgba(0, 0, 0, 0.25);
+  position: relative;
 }
 
 .carousel {
@@ -192,7 +200,7 @@ onBeforeUnmount(() => {
 
 .slides {
   display: flex;
-  height: 100%;
+  height: 100%; /* 让图片占满整个容器 */
   transition: transform 0.5s ease;
 }
 
@@ -203,6 +211,11 @@ onBeforeUnmount(() => {
   background-position: center;
   position: relative;
   cursor: pointer;
+  transition: transform 0.7s ease; /* 放慢放大效果的过渡速度 */
+}
+
+.slide:hover {
+  transform: scale(1.05); /* 鼠标悬停时图片微微放大 */
 }
 
 .slide::after {
@@ -212,100 +225,93 @@ onBeforeUnmount(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(rgba(0, 0, 0, 0.1), rgba(15, 17, 41, 0.9));
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.1) 0%,
+    rgba(0, 0, 0, 0.2) 70%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
 }
 
-.slide-content {
+.movie-info-container {
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  padding: 3rem;
-  color: white;
-  z-index: 1;
-}
-
-.info-container {
-  max-width: 70%;
+  padding: 2rem 3rem;
+  z-index: 2;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.7) 0%,
+    rgba(0, 0, 0, 0.4) 80%,
+    transparent 100%
+  );
 }
 
 .movie-title {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  font-weight: bold;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
-  letter-spacing: 0.5px;
+  font-size: 2.5rem;
+  margin-bottom: 0.8rem;
+  font-weight: 700;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
   color: #ffffff;
-}
-
-.movie-meta {
-  display: flex;
-  align-items: center;
-  margin-bottom: 1.2rem;
+  text-align: left;
 }
 
 .movie-desc {
-  margin-bottom: 1.5rem;
-  font-size: 1.1rem;
-  line-height: 1.7;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
-  opacity: 0.95;
-  max-width: 100%;
-}
-
-.director {
-  margin-left: 1.5rem;
-  font-size: 0.95rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
-}
-
-.rating {
-  display: inline-flex;
-  align-items: center;
-  background-color: #e94560;
-  color: white;
-  padding: 5px 10px;
-  border-radius: 20px;
-  font-weight: bold;
-  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.5);
-  font-size: 0.95rem;
-}
-
-.rating svg {
-  margin-right: 5px;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+  text-align: left;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .carousel-control {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background-color: rgba(0, 0, 0, 0.4);
-  color: white;
+  background-color: rgba(0, 0, 0, 0.5); /* 添加半透明背景 */
   border: none;
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 1.6rem;
+  padding: 0;
+  transition: opacity 0.3s ease, background-color 0.3s ease;
+  border-radius: 50%; /* 添加圆形边框 */
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
-  z-index: 2;
-  opacity: 0.7;
+  outline: none; /* 去除点击时的边框 */
 }
 
-.carousel-control:hover {
-  background-color: rgba(0, 0, 0, 0.7);
+.carousel-container:hover .carousel-control {
   opacity: 1;
 }
 
+.carousel-control:hover {
+  background-color: rgba(0, 0, 0, 0.7); /* 悬停时加深背景色 */
+}
+
+.carousel-control:focus {
+  outline: none; /* 去除焦点时的边框 */
+}
+
+.control-icon {
+  width: 60%;
+  height: 60%;
+}
+
 .prev {
-  left: 20px;
+  left: 30px;
 }
 
 .next {
-  right: 20px;
+  right: 30px;
 }
 
 .carousel-indicators {
@@ -315,18 +321,29 @@ onBeforeUnmount(() => {
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
-  z-index: 2;
+  z-index: 3;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.carousel-indicators.show-indicators {
+  opacity: 1;
 }
 
 .indicator {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.5);
   border: none;
   cursor: pointer;
   transition: all 0.3s ease;
   padding: 0;
+}
+
+.indicator:hover {
+  background-color: rgba(255, 255, 255, 0.8);
+  transform: scale(1.3);
 }
 
 .indicator.active {
