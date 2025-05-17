@@ -28,6 +28,7 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  scroll-padding-top: 100px; /* 避免滚动目标被导航栏遮挡 */
 }
 
 h1 {
@@ -74,4 +75,62 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* 全局性能优化 */
+img {
+  contain: content;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+video {
+  contain: content;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.animation-gpu {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* 减少不必要的重绘 */
+.content-visibility-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* 滚动优化 */
+.scroll-container {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 响应式图片加载 */
+@media (max-width: 768px) {
+  .responsive-img {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+  }
+}
+
+/* 禁用可能导致性能问题的CSS动画 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 移除平滑滚动 */
+html {
+  scroll-behavior: auto; /* 改为即时滚动 */
 }

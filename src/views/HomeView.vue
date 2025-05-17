@@ -19,6 +19,7 @@ const sectionTitle = ref('全部电影');
 const categories = ref([]);
 const isHomePage = ref(true);
 const router = useRouter();
+const scrollPosition = ref(0); // 记录滚动位置
 
 // 获取分类数据
 const fetchCategories = async () => {
@@ -160,11 +161,117 @@ const handleCategoryChange = async (categoryId) => {
 
 // 添加跳转方法
 const goToMovieDetail = (movieId) => {
+  // 保存当前滚动位置到sessionStorage
+  sessionStorage.setItem('homeScrollPosition', window.scrollY.toString());
+  
   router.push({
     name: 'movie-detail',
     params: { id: movieId }
   });
 };
+
+// 根据电影ID查找并滚动到对应位置
+const scrollToMovie = (movieId) => {
+  if (!movieId) return false;
+  
+  console.log('尝试定位到电影ID:', movieId);
+  
+  // 查找电影元素
+  const movieElement = document.querySelector(`[data-movie-id="${movieId}"]`);
+  console.log('查找结果:', movieElement ? '找到元素' : '未找到元素');
+  
+  // 调试 - 打印所有电影卡片信息
+  const allCards = document.querySelectorAll('.movie-card');
+  console.log(`找到 ${allCards.length} 个电影卡片`);
+  allCards.forEach((card, index) => {
+    console.log(`卡片 ${index}:`, card.getAttribute('data-movie-id'));
+  });
+  
+  if (movieElement) {
+    // 使用instant立即滚动无动画
+    console.log('开始滚动到目标电影');
+    movieElement.scrollIntoView({ 
+      behavior: 'instant',
+      block: 'center' 
+    });
+    console.log('滚动完成，定位到电影元素');
+    
+    // 添加高亮效果
+    movieElement.classList.add('highlight-movie');
+    console.log('添加高亮效果');
+    
+    // 3秒后移除高亮
+    setTimeout(() => {
+      movieElement.classList.remove('highlight-movie');
+    }, 3000);
+    
+    return true;
+  }
+  
+  return false;
+};
+
+// 更快的定位尝试，多次尝试但增加延迟间隔
+const attemptFastScroll = (movieId, attempts = 0, maxAttempts = 20) => {
+  console.log(`尝试定位 (${attempts+1}/${maxAttempts})...`);
+  
+  if (attempts >= maxAttempts) {
+    console.log('达到最大尝试次数，停止定位');
+    return;
+  }
+  
+  const success = scrollToMovie(movieId);
+  if (!success) {
+    // 增加延迟间隔，确保DOM有足够时间渲染
+    const delay = Math.min(300 + attempts * 100, 1000); // 延迟从300ms开始，最大不超过1秒
+    console.log(`定位失败，${delay}ms后重试`);
+    setTimeout(() => attemptFastScroll(movieId, attempts + 1, maxAttempts), delay);
+  } else {
+    // 成功后清除缓存
+    console.log('定位成功，清除缓存');
+    sessionStorage.removeItem('lastViewedMovieId');
+  }
+};
+
+// 监听路由变化
+watch(() => router.currentRoute.value.path, (path, oldPath) => {
+  console.log(`路由变化: ${oldPath} -> ${path}`);
+  
+  if (path === '/') {
+    // 当进入首页时，立即尝试定位
+    const lastViewedMovieId = sessionStorage.getItem('lastViewedMovieId');
+    console.log('从sessionStorage读取lastViewedMovieId:', lastViewedMovieId);
+    
+    if (lastViewedMovieId) {
+      console.log('检测到返回首页，准备定位到上次查看的电影:', lastViewedMovieId);
+      
+      // 由于Vue的响应式渲染，我们需要等待DOM更新后再尝试滚动
+      console.log('等待DOM更新后定位');
+      setTimeout(() => {
+        console.log('DOM应该已更新，开始尝试定位');
+        attemptFastScroll(lastViewedMovieId);
+      }, 100);
+    }
+  }
+}, { immediate: true });
+
+// 监听电影数据加载完成
+watch(gridMovies, (newMovies) => {
+  if (newMovies.length > 0) {
+    console.log(`电影数据加载完成，共 ${newMovies.length} 部电影`);
+    
+    // 当电影数据加载完成后，立即尝试定位
+    const lastViewedMovieId = sessionStorage.getItem('lastViewedMovieId');
+    console.log('gridMovies加载后，从sessionStorage读取lastViewedMovieId:', lastViewedMovieId);
+    
+    if (lastViewedMovieId) {
+      console.log('电影数据加载完成，尝试定位到电影:', lastViewedMovieId);
+      setTimeout(() => {
+        attemptFastScroll(lastViewedMovieId);
+      }, 100);
+    }
+  }
+}, { immediate: true });
 
 onMounted(() => {
   console.log('HomeView 组件挂载');
@@ -177,6 +284,15 @@ onMounted(() => {
   
   // 获取所有电影
   fetchMovies();
+  
+  // 检查是否需要定位到特定电影
+  const lastViewedMovieId = sessionStorage.getItem('lastViewedMovieId');
+  console.log('onMounted: 从sessionStorage读取lastViewedMovieId:', lastViewedMovieId);
+  
+  // 如果有lastViewedMovieId，但尚未加载电影数据，则保留ID等待数据加载后处理
+  if (lastViewedMovieId) {
+    console.log('检测到需要定位的电影ID:', lastViewedMovieId);
+  }
 });
 </script>
 
@@ -193,22 +309,30 @@ onMounted(() => {
           :categories="categories"
           :active-category="activeCategory"
           @category-change="handleCategoryChange" 
+          class="content-visibility-auto"
         />
       </aside>
       
       <!-- 右侧内容区 -->
-      <div class="main-content">
+      <div class="main-content scroll-container">
         <!-- 轮播图 - 只在全部电影时显示 -->
-        <div v-if="isHomePage" class="carousel-section">
-          <MovieCarousel :movies="carouselMovies" />
+        <div v-if="isHomePage" class="carousel-section content-visibility-auto">
+          <MovieCarousel :movies="carouselMovies" class="animation-gpu" />
         </div>
         
         <!-- 电影列表 -->
         <div class="movies-section">
           <!-- 加载状态 -->
           <div v-if="loading" class="loading-state">
-            <div class="spinner"></div>
-            <p>加载中...</p>
+            <div class="skeleton-grid">
+              <div class="skeleton-card animation-gpu" v-for="n in 10" :key="n">
+                <div class="skeleton-poster"></div>
+                <div class="skeleton-info">
+                  <div class="skeleton-title"></div>
+                  <div class="skeleton-director"></div>
+                </div>
+              </div>
+            </div>
           </div>
           
           <!-- 错误状态 -->
@@ -224,12 +348,17 @@ onMounted(() => {
           </div>
           
           <!-- 电影列表 -->
-          <div v-else class="movies-grid">
-            <MovieCard
-              v-for="movie in gridMovies"
-              :key="movie.id"
-              :movie="movie"
-            />
+          <div v-else>
+            <div class="movies-container">
+              <div class="movies-grid">
+                <MovieCard
+                  v-for="movie in gridMovies"
+                  :key="movie.id"
+                  :movie="movie"
+                  class="animation-gpu"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -299,8 +428,12 @@ onMounted(() => {
 }
 
 .movies-section {
-  padding: 20px;
-  width: 100%;
+  width: 95%;
+  max-width: 1200px;
+  margin: 20px auto 60px;
+  padding: 25px;
+  background-color: rgba(15, 17, 41, 0.5);
+  border-radius: 16px;
   position: relative;
 }
 
@@ -308,11 +441,76 @@ onMounted(() => {
   display: none;
 }
 
+.section-title {
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(45deg, #ffffff, #e94560);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 1px;
+  position: relative;
+  padding-left: 15px;
+}
+
+.section-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(to bottom, #e94560, #aa2a49);
+  border-radius: 2px;
+}
+
+.movies-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .movies-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 30px;
-  padding: 30px 10px;
+  grid-template-columns: repeat(5, 214px);
+  gap: 20px;
+  padding: 10px 0;
+  justify-content: center;
+}
+
+/* 响应式布局 */
+@media (max-width: 1190px) {
+  .movies-grid {
+    grid-template-columns: repeat(4, 214px);
+  }
+}
+
+@media (max-width: 956px) {
+  .movies-grid {
+    grid-template-columns: repeat(3, 214px);
+  }
+}
+
+@media (max-width: 722px) {
+  .movies-section {
+    padding: 20px;
+    width: 90%;
+  }
+  
+  .movies-container {
+    padding: 0;
+  }
+
+  .movies-grid {
+    grid-template-columns: repeat(2, 214px);
+  }
+}
+
+@media (max-width: 500px) {
+  .movies-grid {
+    grid-template-columns: repeat(1, 214px);
+  }
 }
 
 .loading-state,
@@ -324,6 +522,7 @@ onMounted(() => {
   justify-content: center;
   min-height: 300px;
   color: white;
+  width: 100%;
 }
 
 .spinner {
@@ -334,6 +533,70 @@ onMounted(() => {
   border-top-color: #e94560;
   animation: spin 1s cubic-bezier(0.17, 0.67, 0.83, 0.67) infinite;
   margin-bottom: 20px;
+}
+
+/* 骨架屏效果 */
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 20px;
+  width: 100%;
+  max-width: 1400px;
+  padding: 30px;
+  margin: 0 auto;
+}
+
+.skeleton-card {
+  width: 100%;
+  aspect-ratio: 2/3;
+  background: linear-gradient(145deg, #13173a, #0c0e22);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-poster {
+  flex: 1;
+  background: linear-gradient(110deg, #13173a 25%, #1c2150 37%, #13173a 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+}
+
+.skeleton-info {
+  height: 80px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.skeleton-title {
+  height: 16px;
+  margin-bottom: 12px;
+  width: 80%;
+  background: linear-gradient(110deg, #333755 25%, #444a7a 37%, #333755 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-director {
+  height: 12px;
+  width: 60%;
+  background: linear-gradient(110deg, #333755 25%, #444a7a 37%, #333755 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes loading-shine {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
 }
 
 @keyframes spin {

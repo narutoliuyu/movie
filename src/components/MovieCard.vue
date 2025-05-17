@@ -1,8 +1,7 @@
 <script setup>
-import { defineProps } from 'vue';
+import { defineProps, ref, onMounted, watch, onBeforeMount } from 'vue';
 import { useRouter } from 'vue-router';
 
-const router = useRouter();
 const props = defineProps({
   movie: {
     type: Object,
@@ -10,19 +9,70 @@ const props = defineProps({
   }
 });
 
-const handleClick = () => {
-  if (props.movie && props.movie.id) {
-    router.push(`/movie/${props.movie.id}`);
-  }
+const router = useRouter();
+const imageLoaded = ref(false);
+const isIntersecting = ref(false);
+const cardRef = ref(null);
+
+// 调试用 - 打印电影ID
+console.log('MovieCard 创建，ID:', props.movie.id);
+
+const goToMovieDetail = (movieId) => {
+  // 不再保存滚动位置，而是直接使用ID定位
+  // sessionStorage.setItem('homeScrollPosition', window.scrollY.toString());
+  console.log('点击电影卡片，ID:', movieId);
+  
+  // 显式保存当前浏览的电影ID
+  sessionStorage.setItem('lastViewedMovieId', movieId);
+  
+  router.push({
+    name: 'movie-detail',
+    params: { id: movieId }
+  });
 };
+
+const handleImageLoad = () => {
+  imageLoaded.value = true;
+};
+
+// 使用Intersection Observer实现懒加载
+onMounted(() => {
+  console.log('MovieCard 挂载，ID:', props.movie.id);
+  
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          isIntersecting.value = true;
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1 }
+    );
+    
+    if (cardRef.value) {
+      observer.observe(cardRef.value);
+    }
+  } else {
+    // 如果浏览器不支持IntersectionObserver，默认显示
+    isIntersecting.value = true;
+  }
+});
 </script>
 
 <template>
-  <div class="movie-card" @click="handleClick">
+  <div class="movie-card" 
+    @click="goToMovieDetail(movie.id)" 
+    :data-movie-id="movie.id"
+    ref="cardRef">
     <div class="poster">
+      <div class="poster-placeholder" v-if="!imageLoaded"></div>
       <img 
+        v-if="isIntersecting"
         :src="movie.poster_url || 'https://via.placeholder.com/300x450/1a1a2e/ffffff?text=暂无图片'" 
         :alt="movie.title"
+        @load="handleImageLoad"
+        :class="{'image-loaded': imageLoaded}"
       />
       <div class="rating" v-if="movie.rating">
         <span class="rating-value">{{ movie.rating }}</span>
@@ -37,22 +87,17 @@ const handleClick = () => {
 
 <style scoped>
 .movie-card {
-  width: 180px;
-  border-radius: 20px !important;
+  width: 214px;
+  height: 321px;
+  border-radius: 12px;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
   cursor: pointer;
-  margin: 8px;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
   position: relative;
-  height: 250px;
-  background: linear-gradient(145deg, #13173a, #0c0e22);
-}
-
-.movie-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(233, 69, 96, 0.3);
-  border-radius: 25px !important;
+  background: #0c0e22;
+  margin: 0;
+  display: block;
+  flex: none;
 }
 
 .poster {
@@ -60,41 +105,40 @@ const handleClick = () => {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border-radius: 20px;
+  border-radius: 12px;
+}
+
+.poster-placeholder {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #13173a 0%, #1c2150 50%, #13173a 100%);
+  animation: pulse-bg 2s infinite ease-in-out;
+}
+
+@keyframes pulse-bg {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.8; }
+  100% { opacity: 0.6; }
 }
 
 .poster img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.5s cubic-bezier(0.215, 0.61, 0.355, 1);
   display: block;
-  border-radius: 20px;
+  transition: transform 0.3s ease;
+  transform-origin: center;
+  opacity: 0;
 }
 
+.image-loaded {
+  opacity: 1 !important;
+}
+
+/* 仅保留图片微微放大效果 */
 .movie-card:hover .poster img {
-  transform: scale(1.08);
-}
-
-.rating {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: linear-gradient(135deg, #e94560, #c23758);
-  color: white;
-  padding: 0.25rem 0.6rem;
-  border-radius: 20px;
-  font-weight: bold;
-  font-size: 12px;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 4px 10px rgba(233, 69, 96, 0.5);
-  transition: transform 0.3s ease, border-radius 0.3s ease;
-  z-index: 2;
-}
-
-.movie-card:hover .rating {
-  transform: scale(1.1);
-  border-radius: 12px;
+  transform: scale(1.05);
 }
 
 .info {
@@ -102,52 +146,80 @@ const handleClick = () => {
   bottom: 0;
   left: 0;
   width: 100%;
-  padding: 50px 16px 16px 16px;
+  padding: 16px;
   color: white;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.6) 40%, rgba(0, 0, 0, 0) 100%); /* 增加渐变背景 */
   z-index: 1;
-  transition: all 0.4s ease;
-  border-top-left-radius: 30px;
-  border-top-right-radius: 30px;
-  transform: translateY(5px);
-}
-
-.movie-card:hover .info {
-  padding-bottom: 20px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.8) 60%, transparent 100%);
-  transform: translateY(0);
 }
 
 .title {
   margin: 0 0 8px 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: #ffffff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
-  transition: transform 0.3s ease;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 1); /* 增强文字阴影 */
 }
 
-.movie-card:hover .title {
-  transform: translateY(-3px);
+.rating {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: linear-gradient(135deg, #e94560, #c23758);
+  color: white;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 12px;
+  box-shadow: 0 4px 10px rgba(233, 69, 96, 0.5);
+  z-index: 2;
 }
 
 .director {
   margin: 0;
   font-size: 12px;
-  color: #e0e0e0;
+  color: #e0e0e0; /* 改为浅灰色 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  opacity: 0.8;
-  transform: translateY(3px);
-  transition: all 0.3s ease;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 1); /* 增强文字阴影 */
 }
 
-.movie-card:hover .director {
-  opacity: 1;
-  transform: translateY(0);
+/* 添加高亮样式 */
+.highlight-movie {
+  animation: pulse 3s;
+  position: relative;
+  z-index: 20;
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(233, 69, 96, 0.8);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(233, 69, 96, 0.8);
+    transform: scale(1);
+  }
+  
+  25% {
+    box-shadow: 0 0 20px 5px rgba(233, 69, 96, 0.8);
+    transform: scale(1.08);
+  }
+  
+  50% {
+    box-shadow: 0 0 10px 0 rgba(233, 69, 96, 0.6);
+    transform: scale(1.04);
+  }
+  
+  75% {
+    box-shadow: 0 0 15px 2px rgba(233, 69, 96, 0.7);
+    transform: scale(1.06);
+  }
+  
+  100% {
+    box-shadow: 0 0 0 0 rgba(233, 69, 96, 0);
+    transform: scale(1);
+  }
 }
 </style>

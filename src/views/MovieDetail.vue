@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onUnmounted, shallowRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import NavBar from '../components/NavBar.vue';
+import MovieCard from '../components/MovieCard.vue';
 import { getApiUrl, API_PATHS, API_CONFIG, CookieUtil } from '../api/config';
 import { useUserStore } from '../stores/user';
 import videoUrl from '../assets/video1.mp4';
@@ -11,14 +12,56 @@ import backIcon from '../assets/返回.png';
 const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
-const movie = ref(null);
+const movie = shallowRef(null); // 使用shallowRef减少深层响应式监听
 const loading = ref(true);
 const error = ref('');
 const showVideo = ref(false);
 const isFavorite = ref(false);
+const lastWatchProgress = ref(Math.random() * 0.9 + 0.05); // 随机生成5%-95%的进度
+const similarMovies = shallowRef([]); // 使用shallowRef减少大数组的响应式开销
+let backdropImage = null; // 用于预加载背景图
 
-// 检查电影是否已收藏
-const checkIfFavorite = () => {
+// 使用节流函数，避免频繁执行
+const throttle = (fn, delay = 300) => {
+  let lastCall = 0;
+  return (...args) => {
+    const now = Date.now();
+    if (now - lastCall >= delay) {
+      lastCall = now;
+      return fn(...args);
+    }
+  };
+};
+
+// 预加载背景图片
+const preloadBackdropImage = (url) => {
+  if (!url) return;
+  
+  backdropImage = new Image();
+  backdropImage.src = url;
+};
+
+// 组件卸载时清理资源
+onUnmounted(() => {
+  backdropImage = null;
+  
+  // 清理视频元素
+  if (showVideo.value) {
+    const videoPlayer = document.querySelector('.video-player');
+    if (videoPlayer) {
+      videoPlayer.pause();
+      videoPlayer.src = '';
+      videoPlayer.load();
+    }
+  }
+  
+  // 清理内存中的大对象引用
+  movie.value = null;
+  similarMovies.value = [];
+});
+
+// 检查电影是否已收藏 - 使用节流函数优化
+const checkIfFavorite = throttle(() => {
   if (!movie.value) return false;
   
   try {
@@ -30,18 +73,163 @@ const checkIfFavorite = () => {
   } catch (err) {
     console.error('检查收藏状态失败:', err);
   }
+});
+
+// 获取上次观看进度
+const getLastWatchProgress = () => {
+  if (!movie.value) return null;
+  
+  // 直接使用随机生成的观看进度
+  return lastWatchProgress.value;
+};
+
+// 获取相似电影 - 优化版
+const fetchSimilarMovies = async () => {
+  if (!movie.value) return;
+  
+  try {
+    // 使用缓存数据避免频繁API调用
+    if (sessionStorage.getItem('cachedMovies')) {
+      const cachedData = JSON.parse(sessionStorage.getItem('cachedMovies'));
+      processMovieData(cachedData);
+      return;
+    }
+    
+    // 获取所有电影并过滤
+    const response = await axios.get(getApiUrl(API_PATHS.MOVIES.ALL));
+    let allMovies = [];
+    
+    if (response.data && Array.isArray(response.data.data)) {
+      allMovies = response.data.data;
+    } else if (response.data && Array.isArray(response.data.movies)) {
+      allMovies = response.data.movies;
+    } else if (Array.isArray(response.data)) {
+      allMovies = response.data;
+    }
+    
+    // 缓存电影数据
+    sessionStorage.setItem('cachedMovies', JSON.stringify(allMovies));
+    processMovieData(allMovies);
+    
+  } catch (err) {
+    console.error('获取相似电影失败:', err);
+    // 使用备用数据
+    useFallbackMovies();
+  }
+};
+
+// 处理电影数据 - 优化性能
+const processMovieData = (allMovies) => {
+  requestAnimationFrame(() => {
+    // 过滤条件：不是当前电影且电影类型相同
+    const filteredMovies = allMovies.filter(m => 
+      m.id !== movie.value.id && 
+      m.movie_type === movie.value.movie_type
+    );
+    
+    // 如果没有同类型电影，则显示任意其他电影
+    if (filteredMovies.length === 0) {
+      similarMovies.value = allMovies
+        .filter(m => m.id !== movie.value.id)
+        .slice(0, 5);
+    } else {
+      // 最多取5部相同类型的电影
+      similarMovies.value = filteredMovies.slice(0, 5);
+    }
+  });
+};
+
+// 使用备用数据
+const useFallbackMovies = () => {
+  similarMovies.value = [
+    {
+      id: 101,
+      title: '相似电影1',
+      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影1',
+      director: '导演A',
+      release_date: '2023',
+      movie_type: movie.value?.movie_type || '动作'
+    },
+    {
+      id: 102,
+      title: '相似电影2',
+      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影2',
+      director: '导演B',
+      release_date: '2022',
+      movie_type: movie.value?.movie_type || '动作'
+    },
+    {
+      id: 103,
+      title: '相似电影3',
+      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影3',
+      director: '导演C',
+      release_date: '2021',
+      movie_type: movie.value?.movie_type || '动作'
+    },
+    {
+      id: 104,
+      title: '相似电影4',
+      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影4',
+      director: '导演D',
+      release_date: '2020',
+      movie_type: movie.value?.movie_type || '动作'
+    },
+    {
+      id: 105,
+      title: '相似电影5',
+      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影5',
+      director: '导演E',
+      release_date: '2019',
+      movie_type: movie.value?.movie_type || '动作'
+    }
+  ];
 };
 
 const fetchMovieDetails = async () => {
   try {
     loading.value = true;
     error.value = '';
+    
+    // 首先检查是否有缓存数据
+    const cachedMovies = sessionStorage.getItem('cachedMovies');
+    if (cachedMovies) {
+      const movies = JSON.parse(cachedMovies);
+      const cachedMovie = movies.find(m => m.id == route.params.id);
+      
+      if (cachedMovie) {
+        // 使用requestAnimationFrame分离数据处理和UI渲染
+        requestAnimationFrame(() => {
+          movie.value = cachedMovie;
+          // 预加载背景图片
+          preloadBackdropImage(movie.value.poster_url);
+          // 检查是否已收藏
+          checkIfFavorite();
+          // 获取上次观看进度
+          getLastWatchProgress();
+          // 获取相似电影
+          fetchSimilarMovies();
+          loading.value = false;
+        });
+        return;
+      }
+    }
+    
+    // 无缓存数据，请求API
     const response = await axios.get(getApiUrl('/api/movies/' + route.params.id));
     
     if (response.data.status === 'success') {
-      movie.value = response.data.data;
-      // 检查是否已收藏
-      checkIfFavorite();
+      // 使用requestAnimationFrame分离数据处理和UI渲染
+      requestAnimationFrame(() => {
+        movie.value = response.data.data;
+        // 预加载背景图片
+        preloadBackdropImage(movie.value.poster_url);
+        // 检查是否已收藏
+        checkIfFavorite();
+        // 获取上次观看进度
+        getLastWatchProgress();
+        // 获取相似电影
+        setTimeout(() => fetchSimilarMovies(), 100); // 延迟加载相似电影
+      });
     } else {
       throw new Error(response.data.message || '获取电影详情失败');
     }
@@ -74,7 +262,12 @@ const toggleFavorite = async () => {
       title: movie.value.title,
       poster_url: movie.value.poster_url,
       description: movie.value.description || '',
-      add_time: new Date().toISOString()
+      add_time: new Date().toISOString(),
+      // 添加其他可能需要的字段，便于在收藏列表中显示
+      rating: movie.value.rating,
+      director: movie.value.director,
+      release_date: movie.value.release_date,
+      movie_type: movie.value.movie_type
     };
     
     // 获取当前收藏
@@ -117,9 +310,36 @@ const toggleFavorite = async () => {
         });
       }
     }
+    
+    // 显示操作成功的提示
+    const toastText = isFavorite.value ? '已添加到收藏' : '已从收藏中移除';
+    showToast(toastText);
+    
   } catch (err) {
     console.error('操作收藏失败:', err);
+    showToast('操作失败，请重试');
   }
+};
+
+// 简单的提示框显示
+const showToast = (message) => {
+  const toast = document.createElement('div');
+  toast.className = 'toast-message';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  
+  // 使用CSS动画显示提示框
+  setTimeout(() => {
+    toast.classList.add('show');
+    
+    // 3秒后隐藏并移除提示框
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => {
+        document.body.removeChild(toast);
+      }, 300);
+    }, 2000);
+  }, 10);
 };
 
 // 添加到观看历史
@@ -191,10 +411,22 @@ const saveToLocalStorage = (historyItem) => {
 };
 
 const goBack = () => {
+  // 保存当前电影ID以便返回首页后能找到这个位置
+  if (movie.value) {
+    sessionStorage.setItem('lastViewedMovieId', movie.value.id);
+    // 清除上次保存的滚动位置，确保使用电影ID定位
+    sessionStorage.removeItem('homeScrollPosition');
+  }
   router.back();
 };
 
 const goToHome = () => {
+  // 保存当前电影ID以便返回首页后能找到这个位置
+  if (movie.value) {
+    sessionStorage.setItem('lastViewedMovieId', movie.value.id);
+    // 清除上次保存的滚动位置，确保使用电影ID定位
+    sessionStorage.removeItem('homeScrollPosition');
+  }
   router.push('/');
 };
 
@@ -215,97 +447,211 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="movie-detail">
-    <NavBar />
+  <div class="movie-detail-page">
+    <div class="movie-detail">
+      <NavBar />
 
-    <div v-if="loading" class="loading">
-      <div class="loading-spinner"></div>
-      <p>加载中...</p>
-    </div>
-
-    <div v-else-if="error" class="error">
-      <p>{{ error }}</p>
-      <button class="retry-button" @click="fetchMovieDetails">
-        重试
-      </button>
-    </div>
-
-    <div v-else-if="movie" class="movie-content">
-      <div class="movie-backdrop" :style="{ backgroundImage: 'url(' + movie.poster_url + ')' }">
-        <div class="backdrop-overlay"></div>
-      </div>
-
-      <button class="back-button" @click="goToHome">
-        <img :src="backIcon" alt="返回" class="back-icon" />
-        <span>返回首页</span>
+      <button class="back-button" @click="goBack">
+        <img class="back-icon" :src="backIcon" alt="返回" />
+        返回
       </button>
 
-      <div class="movie-info">
-        <div class="movie-poster-container">
-          <div class="movie-poster">
-            <img :src="movie.poster_url" :alt="movie.title">
-            <div class="rating" v-if="movie.rating">
-              <span class="rating-value">{{ movie.rating }}</span>
-            </div>
-            
-            <div class="poster-overlay">
-              <div class="overlay-actions">
-                <button class="overlay-btn play-btn" @click="playVideo">
-                  <i class="play-icon">▶</i>
-                  <span>播放</span>
-                </button>
-                <button class="overlay-btn favorite-btn" @click="toggleFavorite" :class="{ active: isFavorite }">
-                  <i class="heart-icon">{{ isFavorite ? '♥' : '♡' }}</i>
-                  <span>{{ isFavorite ? '已收藏' : '收藏' }}</span>
-                </button>
+      <div v-if="loading" class="loading">
+        <div class="skeleton-movie-detail">
+          <div class="skeleton-movie-info">
+            <div class="skeleton-poster"></div>
+            <div class="skeleton-info-content">
+              <div class="skeleton-title"></div>
+              <div class="skeleton-subtitle"></div>
+              <div class="skeleton-info-grid">
+                <div class="skeleton-info-item" v-for="n in 6" :key="n"></div>
+              </div>
+              <div class="skeleton-synopsis"></div>
+              <div class="skeleton-buttons">
+                <div class="skeleton-button"></div>
+                <div class="skeleton-button"></div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="movie-details">
-          <h1 class="title">{{ movie.title }}</h1>
-          
-          <div class="meta-info">
-            <span class="year">{{ movie.release_date }}</span>
-            <span class="type">{{ movie.movie_type }}</span>
-          </div>
-
-          <div class="director">
-            <span class="label">导演：</span>
-            <span class="value">{{ movie.director }}</span>
-          </div>
-
-          <div class="description">
-            <h3>剧情简介</h3>
-            <p>{{ movie.description }}</p>
+          <div class="skeleton-similar-movies">
+            <div class="skeleton-section-title"></div>
+            <div class="skeleton-movies-grid">
+              <div class="skeleton-movie-card" v-for="n in 5" :key="n"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 视频播放器 -->
-    <div v-if="showVideo" class="video-player-overlay" @click="closeVideo">
-      <div class="video-player-container" @click.stop>
-        <button class="close-button" @click="closeVideo">×</button>
-        <video 
-          class="video-player" 
-          :src="videoUrl" 
-          controls 
-          autoplay
-          ref="videoPlayer"
-        ></video>
+      <div v-else-if="error" class="error">
+        <p>{{ error }}</p>
+        <button class="retry-button" @click="fetchMovieDetails">
+          重试
+        </button>
+      </div>
+
+      <div v-else-if="movie" class="movie-content">
+        <!-- 背景图 -->
+        <div 
+          class="movie-backdrop animation-gpu" 
+          :style="{ backgroundImage: `url(${movie.backdrop_url || movie.poster_url})` }"
+        >
+          <div class="backdrop-overlay"></div>
+        </div>
+        
+        <div class="movie-info">
+          <!-- 左侧海报 -->
+          <div class="movie-poster-container animation-gpu">
+            <div class="movie-poster">
+              <img 
+                :src="movie.poster_url || 'https://via.placeholder.com/300x450/1a1a2e/ffffff?text=暂无图片'" 
+                :alt="movie.title"
+                loading="eager"
+              />
+              
+              <!-- 评分（常驻显示） -->
+              <div class="rating" v-if="movie.rating">
+                <span class="rating-value">{{ movie.rating }}</span>
+              </div>
+              
+              <!-- 收藏按钮 -->
+              <button 
+                class="favorite-btn" 
+                :class="{'active': isFavorite}"
+                @click.stop="toggleFavorite"
+              >
+                <span class="heart-icon">❤</span>
+              </button>
+              
+              <!-- 悬停时显示的海报覆盖层 -->
+              <div class="poster-overlay">
+                <div class="overlay-actions">
+                  <!-- 播放按钮 -->
+                  <button class="play-btn" @click.stop="playVideo">
+                    <span class="play-icon">▶</span>
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 观看进度 -->
+              <div class="watch-progress-container" v-if="getLastWatchProgress()">
+                <div class="progress-text">已观看 {{ Math.round(getLastWatchProgress() * 100) }}%</div>
+                <div class="progress-bar">
+                  <div class="progress-fill" :style="{width: (getLastWatchProgress() * 100) + '%'}"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右侧详细信息 -->
+          <div class="movie-details content-visibility-auto">
+            <h1 class="title">{{ movie.title }}</h1>
+            <div class="tagline" v-if="movie.tagline">{{ movie.tagline }}</div>
+            
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">上映日期</span>
+                <span class="info-value">{{ movie.release_date }}</span>
+              </div>
+              
+              <div class="info-item">
+                <span class="info-label">类型</span>
+                <span class="info-value">{{ movie.movie_type }}</span>
+              </div>
+              
+              <div class="info-item">
+                <span class="info-label">导演</span>
+                <span class="info-value">{{ movie.director }}</span>
+              </div>
+              
+              <div class="info-item full-width">
+                <span class="info-label">剧情简介</span>
+                <p class="info-value description-text">{{ movie.description }}</p>
+              </div>
+            </div>
+
+            <div class="movie-tags">
+              <span class="tag">动作</span>
+              <span class="tag">冒险</span>
+              <span class="tag">科幻</span>
+              <span class="tag">剧情</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 相似电影推荐 -->
+        <div class="similar-movies-section content-visibility-auto" v-if="similarMovies.length > 0">
+          <h2 class="section-title">相似电影推荐</h2>
+          <div class="similar-movies-container">
+            <div class="similar-movies-grid">
+              <MovieCard
+                v-for="movie in similarMovies"
+                :key="movie.id"
+                :movie="movie"
+                class="animation-gpu"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 视频播放器 -->
+      <div v-if="showVideo" class="video-player-overlay" @click="closeVideo">
+        <div class="video-player-container" @click.stop>
+          <button class="close-button" @click="closeVideo">×</button>
+          <video 
+            class="video-player" 
+            :src="videoUrl" 
+            controls 
+            autoplay
+            ref="videoPlayer"
+            preload="auto"
+          ></video>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
+<style>
+/* 全局样式修复 */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: auto !important;
+  overscroll-behavior: none; /* 防止页面触底反弹 */
+}
+</style>
+
 <style scoped>
+/* 外层容器 */
+.movie-detail-page {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  position: relative;
+  will-change: transform; /* 提示浏览器这个元素会变化，优化性能 */
+  contain: content; /* 告诉浏览器该元素和它的内容尽可能独立于DOM的其他部分 */
+}
+
+/* 修复滚动问题 */
 .movie-detail {
   min-height: 100vh;
   background: #0f1129;
   color: white;
   position: relative;
+  overflow-y: auto !important;
+  padding-bottom: 50px;
+  height: auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  contain: content; /* 性能优化 */
+}
+
+body {
+  overflow-y: auto !important;
+  height: auto !important;
 }
 
 .back-button {
@@ -346,6 +692,7 @@ onMounted(() => {
   justify-content: center;
   min-height: 100vh;
   padding-top: 90px;
+  width: 100%;
 }
 
 .loading-spinner {
@@ -356,6 +703,132 @@ onMounted(() => {
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1.5rem;
+}
+
+/* 骨架屏效果 */
+.skeleton-movie-detail {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.skeleton-movie-info {
+  display: flex;
+  gap: 3rem;
+  margin-bottom: 40px;
+}
+
+.skeleton-poster {
+  width: 300px;
+  height: 450px;
+  border-radius: 16px;
+  background: linear-gradient(110deg, #13173a 25%, #1c2150 37%, #13173a 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+.skeleton-info-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.skeleton-title {
+  height: 40px;
+  width: 70%;
+  background: linear-gradient(110deg, #333755 25%, #444a7a 37%, #333755 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 8px;
+}
+
+.skeleton-subtitle {
+  height: 24px;
+  width: 50%;
+  margin-top: 12px;
+  background: linear-gradient(110deg, #333755 25%, #444a7a 37%, #333755 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 6px;
+}
+
+.skeleton-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.skeleton-info-item {
+  height: 70px;
+  background: linear-gradient(110deg, #1a1f45 25%, #252b5c 37%, #1a1f45 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 8px;
+}
+
+.skeleton-synopsis {
+  height: 120px;
+  margin-top: 20px;
+  background: linear-gradient(110deg, #1a1f45 25%, #252b5c 37%, #1a1f45 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 8px;
+}
+
+.skeleton-buttons {
+  display: flex;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.skeleton-button {
+  height: 50px;
+  width: 150px;
+  background: linear-gradient(110deg, #e9455f33 25%, #e9455f66 37%, #e9455f33 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 50px;
+}
+
+.skeleton-similar-movies {
+  margin-top: 60px;
+}
+
+.skeleton-section-title {
+  height: 30px;
+  width: 200px;
+  margin-bottom: 24px;
+  background: linear-gradient(110deg, #333755 25%, #444a7a 37%, #333755 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 6px;
+}
+
+.skeleton-movies-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 20px;
+}
+
+.skeleton-movie-card {
+  aspect-ratio: 2/3;
+  background: linear-gradient(110deg, #13173a 25%, #1c2150 37%, #13173a 63%);
+  background-size: 200% 100%;
+  animation: loading-shine 1.5s infinite;
+  border-radius: 12px;
+}
+
+@keyframes loading-shine {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
 }
 
 @keyframes spin {
@@ -392,6 +865,11 @@ onMounted(() => {
   position: relative;
   min-height: 100vh;
   padding-top: 90px;
+  padding-bottom: 50px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  contain: content; /* 内容隔离，优化渲染 */
 }
 
 .movie-backdrop {
@@ -403,6 +881,9 @@ onMounted(() => {
   background-size: cover;
   background-position: center;
   z-index: 0;
+  will-change: transform; /* 性能优化 */
+  contain: paint; /* 性能优化 */
+  transform: translateZ(0); /* 触发硬件加速 */
 }
 
 .backdrop-overlay {
@@ -430,17 +911,25 @@ onMounted(() => {
 }
 
 .movie-poster-container {
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  width: 300px;
+  height: 450px;
+  margin-right: 3rem;
+  position: relative;
 }
 
 .movie-poster {
-  width: 300px;
-  height: 450px;
-  position: relative;
+  width: 100%;
+  height: 100%;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.5);
-  transition: all 0.3s ease;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s ease;
+}
+
+.movie-poster:hover {
+  transform: scale(1.02);
 }
 
 .movie-poster img {
@@ -448,116 +937,158 @@ onMounted(() => {
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: transform 0.5s ease;
 }
 
-.movie-poster:hover img {
-  transform: scale(1.05);
+/* 评分组件 - 常驻显示 */
+.rating {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: linear-gradient(135deg, #e94560, #c23758);
+  color: white;
+  padding: 0.25rem 0.7rem;
+  border-radius: 20px;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 4px 10px rgba(233, 69, 96, 0.5);
+  z-index: 3;
+  transition: all 0.3s ease;
 }
 
-/* 海报覆盖层 */
+/* 收藏按钮 */
+.favorite-btn {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(15, 17, 41, 0.7);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.movie-poster:hover .favorite-btn {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.heart-icon {
+  font-size: 20px;
+  color: #8f8f9f;
+  transition: all 0.3s ease;
+}
+
+.favorite-btn.active .heart-icon {
+  color: #e94560;
+  text-shadow: 0 0 10px rgba(233, 69, 96, 0.7);
+}
+
+.favorite-btn:hover .heart-icon {
+  transform: scale(1.2);
+}
+
+/* 海报覆盖层（悬停时显示） */
 .poster-overlay {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(to top, 
-    rgba(0, 0, 0, 0.9) 0%,
-    rgba(0, 0, 0, 0.7) 20%,
-    rgba(0, 0, 0, 0.4) 40%,
-    rgba(0, 0, 0, 0.1) 100%
-  );
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  background: linear-gradient(to top, rgba(12, 14, 34, 0.9) 0%, rgba(12, 14, 34, 0.4) 100%);
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 1.5rem;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 2;
 }
 
 .movie-poster:hover .poster-overlay {
   opacity: 1;
 }
 
+/* 覆盖层内的操作按钮 */
 .overlay-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
+  justify-content: center;
+  align-items: center;
 }
 
-.overlay-btn {
+/* 播放按钮 */
+.play-btn {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  background: rgba(233, 69, 96, 0.85);
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  border: none;
-  border-radius: 8px;
-  padding: 0.7rem 0;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 1rem;
-  transition: transform 0.2s ease, background-color 0.2s ease;
-  opacity: 0;
-  transform: translateY(20px);
+  color: white;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+  transform: scale(0.9);
 }
 
-.movie-poster:hover .overlay-btn {
+.play-btn:hover {
+  transform: scale(1);
+  background: #e94560;
+  box-shadow: 0 0 30px rgba(233, 69, 96, 0.7);
+}
+
+.play-icon {
+  font-size: 30px;
+  margin-left: 5px;
+}
+
+/* 观看进度 */
+.watch-progress-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8), transparent);
+  z-index: 3;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: all 0.3s ease;
+}
+
+.movie-poster:hover .watch-progress-container {
   opacity: 1;
   transform: translateY(0);
 }
 
-.play-btn {
-  background: linear-gradient(135deg, #e94560, #c23758);
-  color: white;
-  transition-delay: 0.1s;
+.progress-text {
+  font-size: 12px;
+  color: #ffffff;
+  margin-bottom: 5px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
-.play-btn:hover {
-  background: linear-gradient(135deg, #e94560, #a92e48);
-  transform: translateY(-2px);
-}
-
-.favorite-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  transition-delay: 0.2s;
-}
-
-.favorite-btn:hover {
+.progress-bar {
+  width: 100%;
+  height: 4px;
   background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+  border-radius: 2px;
+  overflow: hidden;
 }
 
-.favorite-btn.active {
-  color: #e94560;
-}
-
-.play-icon, .heart-icon {
-  font-size: 1.2rem;
-}
-
-.heart-icon {
-  color: white;
-  transition: color 0.3s ease;
-}
-
-.favorite-btn.active .heart-icon {
-  color: #e94560;
-}
-
-.rating {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: linear-gradient(135deg, #e94560, #c23758);
-  color: white;
-  padding: 0.4rem 0.7rem;
-  border-radius: 10px;
-  font-weight: bold;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 10px rgba(233, 69, 96, 0.5);
-  z-index: 2;
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(to right, #e94560, #c23758);
 }
 
 .movie-details {
@@ -577,101 +1108,155 @@ onMounted(() => {
   letter-spacing: 1px;
 }
 
-.meta-info {
-  display: flex;
-  gap: 1.5rem;
-  margin-bottom: 1.8rem;
-}
-
-.year, .type {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1.2rem;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 30px;
-  backdrop-filter: blur(8px);
-  font-size: 0.95rem;
-  color: #e0e0e0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.year:hover, .type:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.director {
-  margin-bottom: 2rem;
-  color: #e0e0e0;
-  padding: 1rem 1.5rem;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
-}
-
-.director:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-3px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.label {
-  color: #b9bad3;
-  margin-right: 0.5rem;
-  font-weight: 500;
-}
-
-.description {
-  margin-bottom: 2.5rem;
-  padding: 1.8rem;
-  background: rgba(255, 255, 255, 0.08);
+/* 新的信息网格布局 */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+  margin-bottom: 30px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 25px;
   border-radius: 16px;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
 }
 
-.description:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-}
-
-.description h3 {
-  font-size: 1.5rem;
-  margin-bottom: 1.2rem;
-  color: #e94560;
+.info-item {
+  display: flex;
+  flex-direction: column;
   position: relative;
-  display: inline-block;
-  font-weight: 600;
-  letter-spacing: 0.5px;
 }
 
-.description h3::after {
+.info-item::after {
   content: '';
   position: absolute;
-  bottom: -5px;
+  bottom: -12px;
   left: 0;
-  width: 40px;
-  height: 3px;
+  width: 30px;
+  height: 2px;
   background: linear-gradient(90deg, #e94560, transparent);
-  border-radius: 3px;
+  border-radius: 1px;
 }
 
-.description p {
+.full-width {
+  grid-column: 1 / -1;
+  margin-top: 15px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-label {
+  font-size: 13px;
+  color: #b9bad3;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.info-value {
+  font-size: 16px;
+  color: #ffffff;
+}
+
+.description-text {
   line-height: 1.8;
+  margin-top: 10px;
   color: #e0e0e0;
-  font-size: 1.05rem;
+  text-align: justify;
+  font-size: 15px;
 }
 
+.movie-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 25px 0;
+}
+
+.tag {
+  background: rgba(233, 69, 96, 0.1);
+  padding: 6px 16px;
+  border-radius: 50px;
+  font-size: 13px;
+  color: #e0e0e0;
+  border: 1px solid rgba(233, 69, 96, 0.2);
+  transition: all 0.3s ease;
+}
+
+.tag:hover {
+  background: rgba(233, 69, 96, 0.2);
+  transform: translateY(-2px);
+}
+
+/* 相似电影推荐区域 */
+.similar-movies-section {
+  margin-top: 50px;
+  padding: 20px 0;
+}
+
+.section-title {
+  font-size: 1.8rem;
+  margin-bottom: 30px;
+  font-weight: 600;
+  background: linear-gradient(45deg, #ffffff, #e94560);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  padding-left: 15px;
+}
+
+.section-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 30px;
+  background: linear-gradient(to bottom, #e94560, #aa2a49);
+  border-radius: 2px;
+}
+
+.similar-movies-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.similar-movies-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 214px);
+  gap: 20px;
+  padding: 10px 0;
+  justify-content: center;
+}
+
+/* 响应式布局 */
+@media (max-width: 1190px) {
+  .similar-movies-grid {
+    grid-template-columns: repeat(4, 214px);
+  }
+}
+
+@media (max-width: 956px) {
+  .similar-movies-grid {
+    grid-template-columns: repeat(3, 214px);
+  }
+}
+
+@media (max-width: 722px) {
+  .similar-movies-grid {
+    grid-template-columns: repeat(2, 214px);
+  }
+}
+
+@media (max-width: 500px) {
+  .similar-movies-grid {
+    grid-template-columns: repeat(1, 214px);
+  }
+}
+
+/* 视频播放器样式 */
 .video-player-overlay {
   position: fixed;
   top: 0;
@@ -731,6 +1316,30 @@ onMounted(() => {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
+/* Toast提示样式 */
+.toast-message {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%) translateY(100px);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-size: 14px;
+  z-index: 10000;
+  opacity: 0;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+
+.toast-message.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
 @media (max-width: 768px) {
   .movie-info {
     flex-direction: column;
@@ -749,9 +1358,9 @@ onMounted(() => {
     text-align: center;
   }
 
-  .meta-info {
+  .info-grid {
+    grid-template-columns: 1fr 1fr;
     justify-content: center;
-    flex-wrap: wrap;
   }
   
   .back-button {
@@ -762,6 +1371,11 @@ onMounted(() => {
   
   .back-button:hover {
     transform: translateX(-50%) translateY(-3px);
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    width: 100%;
   }
 
   .video-player-container {
@@ -775,6 +1389,18 @@ onMounted(() => {
     width: 30px;
     height: 30px;
     font-size: 20px;
+  }
+
+  .similar-movies-grid {
+    justify-content: space-between;
+  }
+  
+  .similar-movies-grid :deep(.movie-card) {
+    width: calc(50% - 8px);
+  }
+  
+  .section-title {
+    font-size: 1.3rem;
   }
 }
 
@@ -790,6 +1416,14 @@ onMounted(() => {
   
   .title {
     font-size: 2.5rem;
+  }
+  
+  .info-grid {
+    gap: 15px;
+  }
+
+  .similar-movies-grid :deep(.movie-card) {
+    width: calc(33.33% - 10px);
   }
 }
 

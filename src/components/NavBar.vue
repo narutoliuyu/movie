@@ -10,6 +10,7 @@ import userIcon from '../assets/用户.png';
 import vipIcon from '../assets/vip.png';
 import historyIcon from '../assets/历史记录.png';
 import messageIcon from '../assets/消息.png';
+import favoriteIcon from '../assets/收藏.png';
 
 // 添加 click-outside 指令
 const vClickOutside = {
@@ -477,6 +478,10 @@ const clearAllSearchHistory = async () => {
             <div class="menu-item" @click="handleMenuClick('history')">
               <img :src="historyIcon" alt="历史记录" class="menu-icon" />
               <span>观看历史</span>
+            </div>
+            <div class="menu-item" @click="handleMenuClick('favorites')">
+              <img :src="favoriteIcon" alt="收藏" class="menu-icon" />
+              <span>我的收藏</span>
             </div>
             <div class="menu-item" @click="handleMenuClick('message')">
               <img :src="messageIcon" alt="消息" class="menu-icon" />
