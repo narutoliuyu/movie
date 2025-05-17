@@ -145,7 +145,7 @@ const handleCategoryClick = (categoryId) => {
 <style scoped>
 .category-sidebar {
   margin-top: 10px;
-  background-color: #171a31;
+  background-color: #0c0e22;
   height: 100%;
   overflow: hidden;
   position: relative;
@@ -191,6 +191,7 @@ const handleCategoryClick = (categoryId) => {
 
 .category-item:hover {
   transform: translateX(0);
+  background-color: rgba(233, 69, 96, 0.05);
 }
 
 .category-item:hover::before {
@@ -198,7 +199,7 @@ const handleCategoryClick = (categoryId) => {
 }
 
 .category-item.active {
-  /* 移除背景色 */
+  background-color: rgba(233, 69, 96, 0.1);
 }
 
 .category-item.active::before {
@@ -299,7 +300,7 @@ const handleCategoryClick = (categoryId) => {
 .loading-spinner {
   width: 30px;
   height: 30px;
-  border: 3px solid rgba(233, 69, 96, 0.3);
+  border: 3px solid rgba(233, 69, 96, 0.2);
   border-radius: 50%;
   border-top-color: #e94560;
   animation: spin 1s linear infinite;
@@ -322,7 +323,7 @@ const handleCategoryClick = (categoryId) => {
 
 .retry-button {
   margin-top: 1rem;
-  background-color: #e94560;
+  background: linear-gradient(135deg, #e94560, #c23758);
   color: white;
   border: none;
   border-radius: 20px;
@@ -330,11 +331,12 @@ const handleCategoryClick = (categoryId) => {
   cursor: pointer;
   font-size: 0.9rem;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
 .retry-button:hover {
-  background-color: #d03651;
+  background: linear-gradient(135deg, #e94560, #aa2a49);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(233, 69, 96, 0.3);
+  box-shadow: 0 6px 20px rgba(233, 69, 96, 0.5);
 }
 </style> 

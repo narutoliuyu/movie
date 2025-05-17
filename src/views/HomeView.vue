@@ -10,6 +10,8 @@ import { useRouter } from 'vue-router';
 
 const movies = ref([]);
 const filteredMovies = ref([]);
+const carouselMovies = ref([]);
+const gridMovies = ref([]);
 const loading = ref(true);
 const error = ref(null);
 const activeCategory = ref(null);
@@ -70,13 +72,30 @@ const fetchMovies = async () => {
     } else if (Array.isArray(response.data)) {
       movies.value = response.data;
     }
+    
     // 初始化筛选后的电影列表
     filteredMovies.value = [...movies.value];
+    
+    // 分离轮播图电影和网格电影
+    splitMovies();
   } catch (err) {
     console.error('获取电影数据错误:', err);
     error.value = err.response?.data?.message || '获取电影数据失败';
   } finally {
     loading.value = false;
+  }
+};
+
+// 分离轮播图电影和网格电影
+const splitMovies = () => {
+  if (movies.value.length > 0) {
+    // 取前5部电影作为轮播图
+    carouselMovies.value = movies.value.slice(0, 5);
+    // 剩余电影作为网格展示
+    gridMovies.value = movies.value.slice(5);
+  } else {
+    carouselMovies.value = [];
+    gridMovies.value = [];
   }
 };
 
@@ -100,6 +119,10 @@ const fetchMoviesByCategory = async (categoryId) => {
         acc[movie.movie_type] = (acc[movie.movie_type] || 0) + 1;
         return acc;
       }, {}));
+      
+      // 分离轮播图电影和网格电影 (分类页面全部以网格展示)
+      gridMovies.value = [...movies.value];
+      carouselMovies.value = [];
     } else {
       throw new Error(response.data.message || '获取电影失败');
     }
@@ -177,7 +200,7 @@ onMounted(() => {
       <div class="main-content">
         <!-- 轮播图 - 只在全部电影时显示 -->
         <div v-if="isHomePage" class="carousel-section">
-          <MovieCarousel />
+          <MovieCarousel :movies="carouselMovies" />
         </div>
         
         <!-- 电影列表 -->
@@ -195,7 +218,7 @@ onMounted(() => {
           </div>
           
           <!-- 空状态 -->
-          <div v-else-if="movies.length === 0" class="empty-state">
+          <div v-else-if="gridMovies.length === 0" class="empty-state">
             <p>暂无电影数据</p>
             <button class="retry-button" @click="handleCategoryChange(activeCategory)">刷新</button>
           </div>
@@ -203,7 +226,7 @@ onMounted(() => {
           <!-- 电影列表 -->
           <div v-else class="movies-grid">
             <MovieCard
-              v-for="movie in movies"
+              v-for="movie in gridMovies"
               :key="movie.id"
               :movie="movie"
             />
@@ -236,10 +259,10 @@ onMounted(() => {
   min-width: 220px;
   height: 100%;
   flex-shrink: 0;
-  background-color: #111431;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+  background-color: #0c0e22;
+  box-shadow: 10px 0 20px -5px rgba(0, 0, 0, 0.3);
   z-index: 10;
+  position: relative;
 }
 
 .main-content {
@@ -282,13 +305,7 @@ onMounted(() => {
 }
 
 .movies-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 5%;
-  width: 90%;
-  height: 1px;
-  background: linear-gradient(to right, transparent, rgba(233, 69, 96, 0.3), transparent);
+  display: none;
 }
 
 .movies-grid {
@@ -361,7 +378,7 @@ onMounted(() => {
   color: #b9bad3;
 }
 
-/* 移除这些样式，因为它们与 MovieCard 组件中定义的冲突 */
+/* 确保移除所有可能与MovieCard组件样式冲突的样式 */
 .movie-card,
 .movie-card:hover,
 .poster-container,
@@ -371,7 +388,7 @@ onMounted(() => {
 .movie-info,
 .movie-title,
 .movie-director {
-  all: unset;
+  all: unset !important;
 }
 
 .debug-info {

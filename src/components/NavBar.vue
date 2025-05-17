@@ -54,6 +54,11 @@ onMounted(async () => {
     isLoggedIn: userStore.isLoggedIn, 
     userId: userStore.userId 
   });
+  
+  // 从Cookie读取rememberMe状态
+  rememberMe.value = CookieUtil.getCookie('rememberMe') === 'true';
+  
+  console.log('记住我初始状态:', rememberMe.value);
 });
 
 // 获取搜索历史
@@ -189,17 +194,31 @@ const handleLogin = async () => {
       return;
     }
     
-    console.log('开始登录请求', { username: username.value });
+    console.log('开始登录请求', { 
+      username: username.value, 
+      rememberMe: rememberMe.value 
+    });
+    
+    // 先清除任何可能存在的旧状态
+    userStore.logout();
+    
+    // 然后进行新的登录
     const result = await userStore.login(username.value, password.value, rememberMe.value);
 
     if (result.success) {
-      showLoginModal.value = false;
-      username.value = '';
-      password.value = '';
-      
       console.log('登录成功，用户ID:', result.userId);
+      
+      // 关闭登录模态框前确保状态已更新
+      setTimeout(() => {
+        showLoginModal.value = false;
+        username.value = '';
+        password.value = '';
+        
+        // 保持rememberMe的值以便下次使用
+        console.log('登录状态已更新，用户ID:', userStore.userId);
+      }, 300);
     } else {
-      loginError.value = result.message;
+      loginError.value = result.message || '登录失败，请稍后重试';
     }
   } catch (error) {
     console.error('登录请求失败:', error);
@@ -439,7 +458,11 @@ const clearAllSearchHistory = async () => {
       <template v-if="isLoggedIn">
         <div class="user-menu" v-click-outside="() => showUserMenu = false">
           <button @click="toggleUserMenu" class="user-menu-button">
-            <img :src="userIcon" alt="用户" class="user-icon" />
+            <div class="user-info-display">
+              <img :src="userIcon" alt="用户" class="user-avatar" />
+              <span class="username">{{ userStore.username}}</span>
+              <img src="../assets/会员.png" alt="VIP" class="vip-icon" />
+            </div>
           </button>
           
           <div v-if="showUserMenu" class="user-dropdown">
@@ -451,7 +474,7 @@ const clearAllSearchHistory = async () => {
               <img :src="vipIcon" alt="VIP" class="menu-icon" />
               <span>VIP会员</span>
             </div>
-            <div class="menu-item" @click="router.push('/history')">
+            <div class="menu-item" @click="handleMenuClick('history')">
               <img :src="historyIcon" alt="历史记录" class="menu-icon" />
               <span>观看历史</span>
             </div>
@@ -501,7 +524,7 @@ const clearAllSearchHistory = async () => {
 
         <div class="form-options">
           <label class="remember-me">
-            <input type="checkbox" v-model="rememberMe" />
+            <input type="checkbox" v-model="rememberMe" id="remember-me-checkbox" />
             <span>7天内免登录</span>
           </label>
           <a href="#" class="forgot-password">忘记密码？</a>
@@ -598,9 +621,9 @@ const clearAllSearchHistory = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 1rem 2rem;
-  background-color: #1a1a2e;
+  background-color: #0c0e22;
   color: white;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   width: 100%;
   height: 70px;
   position: fixed;
@@ -631,6 +654,9 @@ const clearAllSearchHistory = async () => {
   font-size: 1.5rem;
   font-weight: bold;
   margin: 0;
+  background: linear-gradient(to right, #ffffff, #e0e0e0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* 搜索框样式 */
@@ -642,13 +668,13 @@ const clearAllSearchHistory = async () => {
   position: relative;
   border-radius: 25px;
   overflow: visible;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
-  background: #16213e;
+  background: #111431;
 }
 
 .search-container:hover {
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
   transform: translateY(-2px);
 }
 
@@ -659,21 +685,21 @@ const clearAllSearchHistory = async () => {
   border-radius: 25px 0 0 25px;
   font-size: 1rem;
   outline: none;
-  background: #16213e;
+  background: #111431;
   color: white;
   transition: all 0.3s ease;
 }
 
 .search-input::placeholder {
-  color: #666;
+  color: #777;
 }
 
 .search-input:focus {
-  background: #1a1a2e;
+  background: #13173a;
 }
 
 .search-button {
-  background: #e94560;
+  background: linear-gradient(135deg, #e94560, #c23758);
   color: white;
   border: none;
   border-radius: 0 25px 25px 0;
@@ -684,11 +710,13 @@ const clearAllSearchHistory = async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  box-shadow: 0 2px 10px rgba(233, 69, 96, 0.3);
 }
 
 .search-button:hover {
-  background: #d03651;
+  background: linear-gradient(135deg, #e94560, #aa2a49);
   transform: translateX(2px);
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
 @media (max-width: 768px) {
@@ -709,8 +737,9 @@ const clearAllSearchHistory = async () => {
 .user-actions {
   display: flex;
   align-items: center;
-  min-width: 150px;
-  margin-left: 20px;
+  min-width: 120px;
+  margin-right: 100px;
+  margin-left: -70px;
 }
 
 .welcome-text {
@@ -718,7 +747,7 @@ const clearAllSearchHistory = async () => {
 }
 
 .login-button, .logout-button {
-  background-color: #e94560;
+  background: linear-gradient(135deg, #e94560, #c23758);
   border: none;
   color: white;
   padding: 0.7rem 1.5rem;
@@ -731,7 +760,7 @@ const clearAllSearchHistory = async () => {
 }
 
 .login-button:hover, .logout-button:hover {
-  background-color: #d03651;
+  background: linear-gradient(135deg, #e94560, #aa2a49);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
 }
@@ -745,31 +774,89 @@ const clearAllSearchHistory = async () => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 5px;
-  border-radius: 50%;
+  padding: 5px 10px;
+  border-radius: 25px;
   transition: all 0.3s ease;
+  outline: none;
 }
 
 .user-menu-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  transform: none;
 }
 
-.user-icon {
-  width: 32px;
-  height: 32px;
+.user-menu-button:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.user-info-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px;
+}
+
+.user-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.username {
+  font-size: 16px;
+  font-weight: 500;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: linear-gradient(90deg, #e94560, #ff6b9b, #5271ff, #e94560);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: gradientText 8s ease infinite;
+}
+
+@keyframes gradientText {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.vip-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: -2px;
+  transition: transform 0.3s ease;
+  align-self: center;
+}
+
+.user-menu-button:hover .vip-icon {
+  transform: none;
 }
 
 .user-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 5px);
   right: 0;
-  background-color: #1a1a2e;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  background-color: #0c0e22;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
   padding: 8px 0;
   min-width: 180px;
-  margin-top: 8px;
   animation: slideDown 0.3s ease;
+  backdrop-filter: blur(10px);
+  z-index: 200;
 }
 
 .menu-item {
@@ -782,7 +869,8 @@ const clearAllSearchHistory = async () => {
 }
 
 .menu-item:hover {
-  background-color: rgba(233, 69, 96, 0.1);
+  transform: translateX(4px);
+  color: #e94560;
 }
 
 .menu-icon {
@@ -816,14 +904,15 @@ const clearAllSearchHistory = async () => {
 }
 
 .modal-content {
-  background: white;
+  background: linear-gradient(145deg, #13173a, #0c0e22);
   padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
   width: 100%;
   max-width: 400px;
   position: relative;
   z-index: 1001;
+  color: white;
 }
 
 .modal-overlay {
@@ -832,7 +921,8 @@ const clearAllSearchHistory = async () => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
 }
 
 .modal-header {
@@ -845,7 +935,7 @@ const clearAllSearchHistory = async () => {
 .modal-header h3 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: white;
 }
 
 .close-button {
@@ -853,7 +943,7 @@ const clearAllSearchHistory = async () => {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: #aaa;
   padding: 0.5rem;
 }
 
@@ -864,22 +954,24 @@ const clearAllSearchHistory = async () => {
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  color: #333;
+  color: #c4c5e3;
   font-weight: 500;
 }
 
 .form-group input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #2a2d50;
+  border-radius: 8px;
   font-size: 1rem;
+  background-color: #171a31;
+  color: white;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+  border-color: #e94560;
+  box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.2);
 }
 
 .form-options {
@@ -893,16 +985,25 @@ const clearAllSearchHistory = async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #666;
+  color: #b9bad3;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember-me input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #e94560;
 }
 
 .forgot-password {
-  color: #4a90e2;
+  color: #e94560;
   text-decoration: none;
 }
 
 .error-message {
-  color: #dc3545;
+  color: #e94560;
   margin-bottom: 1rem;
   font-size: 0.875rem;
 }
@@ -914,29 +1015,32 @@ const clearAllSearchHistory = async () => {
 .confirm-button {
   width: 100%;
   padding: 0.75rem;
-  background-color: #4a90e2;
+  background: linear-gradient(135deg, #e94560, #c23758);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(233, 69, 96, 0.3);
 }
 
 .confirm-button:hover {
-  background-color: #357abd;
+  background: linear-gradient(135deg, #e94560, #aa2a49);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
 .register-link,
 .login-link {
   margin-top: 1rem;
   text-align: center;
-  color: #666;
+  color: #b9bad3;
 }
 
 .register-link a,
 .login-link a {
-  color: #4a90e2;
+  color: #e94560;
   text-decoration: none;
   font-weight: 500;
 }
@@ -963,12 +1067,13 @@ const clearAllSearchHistory = async () => {
   top: 100%;
   left: 0;
   right: 0;
-  background-color: #1a1a2e;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  margin-top: 8px;
+  background-color: #0c0e22;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  margin-top: 12px;
   padding: 1rem;
   z-index: 1000;
+  backdrop-filter: blur(5px);
 }
 
 .suggestion-section {
@@ -1002,12 +1107,14 @@ const clearAllSearchHistory = async () => {
   align-items: center;
   padding: 0.5rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
   color: white;
+  border-radius: 6px;
 }
 
 .suggestion-item:hover {
   background-color: rgba(233, 69, 96, 0.1);
+  transform: translateX(4px);
 }
 
 .suggestion-content {
@@ -1025,11 +1132,12 @@ const clearAllSearchHistory = async () => {
   font-size: 0.875rem;
   font-weight: bold;
   margin-right: 0.5rem;
+  color: #e94560;
 }
 
 .no-data {
   text-align: center;
-  color: #aaa;
+  color: #b9bad3;
   padding: 1rem;
 }
 

@@ -8,13 +8,24 @@ const userStore = useUserStore()
 const handleVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
     console.log('页面变为可见，重新检查登录状态')
-    userStore.initializeState()
+    try {
+      userStore.initializeState()
+      console.log('页面可见性变化后，用户状态初始化成功')
+    } catch (error) {
+      console.error('页面可见性变化后初始化用户状态失败:', error)
+    }
   }
 }
 
 // 组件挂载时初始化用户状态
 onMounted(async () => {
-  await userStore.initializeState()
+  try {
+    // 初始化用户状态
+    await userStore.initializeState()
+    console.log('App mounted, user state initialized')
+  } catch (error) {
+    console.error('App挂载时初始化用户状态失败:', error)
+  }
   
   // 添加页面可见性变化事件监听器
   document.addEventListener('visibilitychange', handleVisibilityChange)

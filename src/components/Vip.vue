@@ -137,142 +137,184 @@ const handlePurchase = async () => {
 
 <style scoped>
 .vip {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem;
+  width: 100%;
+  height: 100%;
+  color: white;
 }
 
 .header {
   text-align: center;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .header h2 {
-  font-size: 2rem;
-  color: #333;
+  font-size: 1.8rem;
+  background: linear-gradient(135deg, #e94560, #ff78a9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
   margin: 0;
+  letter-spacing: 1px;
 }
 
 .subtitle {
-  color: #666;
+  color: #b9bad3;
   margin-top: 0.5rem;
+  font-size: 0.9rem;
 }
 
 .plans-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-bottom: 3rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
 }
 
 .plan-card {
-  background: white;
-  border-radius: 8px;
-  padding: 2rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(145deg, rgba(19, 23, 58, 0.7), rgba(23, 28, 73, 0.7));
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
   cursor: pointer;
-  border: 2px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .plan-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .plan-card.selected {
-  border-color: #4a90e2;
+  border: 2px solid #e94560;
+  background: linear-gradient(145deg, rgba(19, 23, 58, 0.8), rgba(23, 28, 73, 0.8));
+  box-shadow: 0 8px 25px rgba(233, 69, 96, 0.2);
 }
 
 .plan-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .plan-header h3 {
   margin: 0;
-  color: #333;
-  font-size: 1.5rem;
+  color: white;
+  font-size: 1.3rem;
+  font-weight: 600;
 }
 
 .price {
-  margin-top: 1rem;
+  margin-top: 0.8rem;
 }
 
 .amount {
-  font-size: 2rem;
+  font-size: 1.8rem;
   font-weight: bold;
-  color: #4a90e2;
+  background: linear-gradient(135deg, #e94560, #ff78a9);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .duration {
-  color: #666;
-  font-size: 1rem;
+  color: #b9bad3;
+  font-size: 0.9rem;
 }
 
 .features {
   list-style: none;
   padding: 0;
-  margin: 0 0 2rem;
+  margin: 0 0 1.5rem;
+  flex-grow: 1;
 }
 
 .features li {
   padding: 0.5rem 0;
-  color: #666;
+  color: #b9bad3;
   display: flex;
   align-items: center;
+  font-size: 0.9rem;
 }
 
 .check-icon {
-  color: #4a90e2;
-  margin-right: 0.5rem;
+  color: #e94560;
+  margin-right: 0.6rem;
   font-weight: bold;
 }
 
 .select-button {
   width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #4a90e2;
-  background: none;
-  color: #4a90e2;
-  border-radius: 4px;
+  padding: 0.8rem;
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  color: #e94560;
+  border-radius: 50px;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.9rem;
   transition: all 0.3s ease;
+  margin-top: auto;
+  align-self: center;
+}
+
+.select-button:hover {
+  background: rgba(233, 69, 96, 0.2);
+  transform: translateY(-3px);
 }
 
 .select-button.selected {
-  background: #4a90e2;
+  background: linear-gradient(135deg, #e94560, #c23758);
   color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+}
+
+.error-message {
+  color: #e94560;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
 }
 
 .actions {
   text-align: center;
+  margin-top: 2rem;
 }
 
 .purchase-button {
-  padding: 1rem 3rem;
-  background: #4a90e2;
+  background: linear-gradient(135deg, #e94560, #c23758);
   color: white;
   border: none;
-  border-radius: 4px;
-  font-size: 1.2rem;
+  padding: 1rem 3rem;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.3);
 }
 
-.purchase-button:hover:not(:disabled) {
-  background: #357abd;
+.purchase-button:hover {
+  background: linear-gradient(135deg, #e94560, #aa2a49);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(233, 69, 96, 0.4);
 }
 
 .purchase-button:disabled {
-  background: #ccc;
+  background: #666;
   cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: none;
 }
 
-.error-message {
-  text-align: center;
-  color: #dc3545;
-  margin-bottom: 1rem;
+@media (max-width: 768px) {
+  .plans-container {
+    grid-template-columns: 1fr;
+  }
 }
 </style> 

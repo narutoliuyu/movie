@@ -1,12 +1,12 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, defineProps } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import { getApiUrl, API_PATHS, API_CONFIG, handleApiError } from '../api/config';
 
 const router = useRouter();
-const slides = ref([]);
-const currentSlide = ref(0);
+const currentIndex = ref(0);
+const autoplayInterval = ref(null);
 const loading = ref(true);
 const error = ref(null);
 const showControls = ref(false);
@@ -14,6 +14,13 @@ const retryCount = ref(0);
 const maxRetries = 3;
 let timer = null;
 let autoSlideEnabled = true;
+
+const props = defineProps({
+  movies: {
+    type: Array,
+    default: () => []
+  }
+});
 
 const fetchFeaturedMovies = async () => {
   try {
@@ -30,7 +37,7 @@ const fetchFeaturedMovies = async () => {
     }
     
     // 只取前5部电影
-    slides.value = movies.slice(0, 5).map(movie => ({
+    props.movies = movies.slice(0, 5).map(movie => ({
       id: movie.id,
       title: movie.title,
       poster_url: movie.poster_url,
@@ -62,26 +69,26 @@ onMounted(() => {
 });
 
 // 当slides变化时重置当前幻灯片位置
-watch(slides, () => {
-  if (slides.value.length > 0 && currentSlide.value >= slides.value.length) {
-    currentSlide.value = 0;
+watch(props.movies, () => {
+  if (props.movies.length > 0 && currentIndex.value >= props.movies.length) {
+    currentIndex.value = 0;
   }
 });
 
 const nextSlide = () => {
-  if (slides.value.length > 0) {
-    currentSlide.value = (currentSlide.value + 1) % slides.value.length;
+  if (props.movies && props.movies.length > 0) {
+    currentIndex.value = (currentIndex.value + 1) % props.movies.length;
   }
 };
 
 const prevSlide = () => {
-  if (slides.value.length > 0) {
-    currentSlide.value = (currentSlide.value - 1 + slides.value.length) % slides.value.length;
+  if (props.movies && props.movies.length > 0) {
+    currentIndex.value = (currentIndex.value - 1 + props.movies.length) % props.movies.length;
   }
 };
 
 const setSlide = (index) => {
-  currentSlide.value = index;
+  currentIndex.value = index;
 };
 
 const startAutoSlide = () => {
@@ -131,47 +138,47 @@ onBeforeUnmount(() => {
     <div v-else-if="error" class="error-container">
       <p>{{ error }}</p>
     </div>
-    <div v-else-if="slides.length === 0" class="empty-container">
+    <div v-else-if="props.movies.length === 0" class="empty-container">
       <p>暂无轮播数据</p>
     </div>
     <div v-else class="carousel">
-      <div class="slides" :style="{ transform: `translateX(-${currentSlide * 100}%)` }">
+      <div class="slides" :style="{ transform: `translateX(-${currentIndex * 100}%)` }">
         <div 
-          v-for="slide in slides" 
-          :key="slide.id" 
+          v-for="(movie, index) in props.movies" 
+          :key="movie.id" 
           class="slide"
-          :style="{ backgroundImage: `url(${slide.poster_url})` }"
-          @click="goToMovieDetail(slide.id)"
+          :style="{ backgroundImage: `url(${movie.poster_url})` }"
+          @click="goToMovieDetail(movie.id)"
         >
         </div>
       </div>
       
       <div class="movie-info-container">
-        <h2 class="movie-title">{{ slides[currentSlide].title }}</h2>
-        <p class="movie-desc">{{ slides[currentSlide].description }}</p>
+        <h2 class="movie-title">{{ props.movies[currentIndex].title }}</h2>
+        <p class="movie-desc">{{ props.movies[currentIndex].description }}</p>
       </div>
       
       <button 
-        v-show="showControls && slides.length > 1" 
+        v-show="showControls && props.movies.length > 1" 
         class="carousel-control prev" 
         @click.stop="prevSlide"
       >
         <img src="/src/assets/左.png" alt="上一个" class="control-icon" />
       </button>
       <button 
-        v-show="showControls && slides.length > 1" 
+        v-show="showControls && props.movies.length > 1" 
         class="carousel-control next" 
         @click.stop="nextSlide"
       >
         <img src="/src/assets/右.png" alt="下一个" class="control-icon" />
       </button>
       
-      <div v-if="slides.length > 1" class="carousel-indicators" :class="{ 'show-indicators': showControls }">
+      <div v-if="props.movies.length > 1" class="carousel-indicators" :class="{ 'show-indicators': showControls }">
         <button 
-          v-for="(slide, index) in slides" 
-          :key="slide.id"
+          v-for="(movie, index) in props.movies" 
+          :key="movie.id"
           class="indicator"
-          :class="{ active: index === currentSlide }"
+          :class="{ active: index === currentIndex }"
           @click.stop="setSlide(index)"
         ></button>
       </div>

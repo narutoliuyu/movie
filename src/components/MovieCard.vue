@@ -27,47 +27,49 @@ const handleClick = () => {
       <div class="rating" v-if="movie.rating">
         <span class="rating-value">{{ movie.rating }}</span>
       </div>
-    </div>
-    <div class="info">
-      <h3 class="title">{{ movie.title }}</h3>
-      <p class="director">导演：{{ movie.director }}</p>
+      <div class="info">
+        <h3 class="title">{{ movie.title }}</h3>
+        <p class="director">导演：{{ movie.director || '未知' }}</p>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .movie-card {
-  width: 200px;
-  background: linear-gradient(145deg, #1a1a2e, #16213e);
-  border-radius: 12px;
+  width: 180px;
+  border-radius: 20px !important;
   overflow: hidden;
   transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
   cursor: pointer;
-  margin: 10px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+  margin: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  position: relative;
+  height: 250px;
+  background: linear-gradient(145deg, #13173a, #0c0e22);
 }
 
 .movie-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 12px 25px rgba(0, 0, 0, 0.4), 0 0 10px rgba(233, 69, 96, 0.2);
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(233, 69, 96, 0.3);
+  border-radius: 25px !important;
 }
 
 .poster {
   position: relative;
   width: 100%;
-  height: 300px;
-  padding-top: 150%;
+  height: 100%;
   overflow: hidden;
+  border-radius: 20px;
 }
 
 .poster img {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   transition: transform 0.5s cubic-bezier(0.215, 0.61, 0.355, 1);
+  display: block;
+  border-radius: 20px;
 }
 
 .movie-card:hover .poster img {
@@ -83,34 +85,69 @@ const handleClick = () => {
   padding: 0.25rem 0.6rem;
   border-radius: 20px;
   font-weight: bold;
+  font-size: 12px;
   backdrop-filter: blur(4px);
-  box-shadow: 0 2px 10px rgba(233, 69, 96, 0.5);
-  transition: transform 0.3s ease;
+  box-shadow: 0 4px 10px rgba(233, 69, 96, 0.5);
+  transition: transform 0.3s ease, border-radius 0.3s ease;
+  z-index: 2;
 }
 
 .movie-card:hover .rating {
   transform: scale(1.1);
+  border-radius: 12px;
 }
 
 .info {
-  padding: 16px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 50px 16px 16px 16px;
   color: white;
-  background: linear-gradient(to top, #0e1123, #16213e);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 50%, transparent 100%);
+  z-index: 1;
+  transition: all 0.4s ease;
+  border-top-left-radius: 30px;
+  border-top-right-radius: 30px;
+  transform: translateY(5px);
+}
+
+.movie-card:hover .info {
+  padding-bottom: 20px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.8) 60%, transparent 100%);
+  transform: translateY(0);
 }
 
 .title {
   margin: 0 0 8px 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  transition: transform 0.3s ease;
+}
+
+.movie-card:hover .title {
+  transform: translateY(-3px);
 }
 
 .director {
   margin: 0;
-  font-size: 14px;
-  color: #c4c5e3;
+  font-size: 12px;
+  color: #e0e0e0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+  transform: translateY(3px);
+  transition: all 0.3s ease;
+}
+
+.movie-card:hover .director {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>

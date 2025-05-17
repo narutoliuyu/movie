@@ -5,6 +5,16 @@ import Profile from '../components/Profile.vue';
 import Vip from '../components/Vip.vue';
 import History from '../components/History.vue';
 import Message from '../components/Message.vue';
+import Favorites from '../components/Favorites.vue';
+import NavBar from '../components/NavBar.vue';
+import backIcon from '../assets/返回.png';
+
+// 导入正确的图标
+import userIcon from '../assets/个人中心.png';
+import vipIcon from '../assets/vip.png';
+import historyIcon from '../assets/历史记录.png';
+import messageIcon from '../assets/消息.png';
+import favoritesIcon from '../assets/收藏.png';
 
 const route = useRoute();
 const router = useRouter();
@@ -14,14 +24,16 @@ const components = {
   profile: Profile,
   vip: Vip,
   history: History,
-  message: Message
+  message: Message,
+  favorites: Favorites
 };
 
 const menuItems = [
-  { id: 'profile', name: '个人资料' },
-  { id: 'vip', name: 'VIP会员' },
-  { id: 'history', name: '观看历史' },
-  { id: 'message', name: '消息中心' }
+  { id: 'profile', name: '个人资料', icon: userIcon },
+  { id: 'vip', name: 'VIP会员', icon: vipIcon },
+  { id: 'favorites', name: '我的收藏', icon: favoritesIcon },
+  { id: 'history', name: '观看历史', icon: historyIcon },
+  { id: 'message', name: '消息中心', icon: messageIcon }
 ];
 
 // 监听路由查询参数变化
@@ -42,29 +54,31 @@ const goToHome = () => {
 
 <template>
   <div class="center-view">
-    <div class="header">
-      <button class="back-button" @click="goToHome">
-        <i class="back-icon">←</i>
-        返回首页
-      </button>
-      <h1>个人中心</h1>
-    </div>
+    <NavBar />
     
-    <div class="main-content">
-      <div class="sidebar">
-        <div 
-          v-for="item in menuItems" 
-          :key="item.id"
-          class="menu-item"
-          :class="{ active: currentComponent === item.id }"
-          @click="currentComponent = item.id"
-        >
-          {{ item.name }}
-        </div>
+    <div class="center-content">
+      <div class="back-home" @click="goToHome">
+        <img :src="backIcon" alt="返回主页" class="back-icon" />
+        <span>返回主页</span>
       </div>
       
-      <div class="content">
-        <component :is="components[currentComponent]" />
+      <div class="main-content">
+        <div class="sidebar">
+          <div 
+            v-for="item in menuItems" 
+            :key="item.id"
+            class="menu-item"
+            :class="{ active: currentComponent === item.id }"
+            @click="currentComponent = item.id"
+          >
+            <img :src="item.icon" alt="图标" class="menu-icon" />
+            <span>{{ item.name }}</span>
+          </div>
+        </div>
+        
+        <div class="content">
+          <component :is="components[currentComponent]" />
+        </div>
       </div>
     </div>
   </div>
@@ -73,105 +87,164 @@ const goToHome = () => {
 <style scoped>
 .center-view {
   min-height: 100vh;
-  background: #1a1a2e;
+  background: #0f1129;
   color: white;
-  padding-top: 70px;
 }
 
-.header {
-  background: #16213e;
+.center-content {
+  padding-top: 90px;
+  min-height: calc(100vh - 90px);
+  display: flex;
+  flex-direction: column;
+}
+
+.back-home {
+  display: flex;
+  align-items: center;
   padding: 1rem 2rem;
-  display: flex;
-  align-items: center;
-  gap: 2rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-}
-
-.back-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #e94560;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-size: 1rem;
+  color: #b9bad3;
+  width: fit-content;
 }
 
-.back-button:hover {
-  background: #d03651;
-  transform: translateY(-2px);
+.back-home:hover {
+  color: #e94560;
+  transform: translateX(-5px);
 }
 
 .back-icon {
-  font-size: 1.2rem;
-}
-
-.header h1 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: white;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
 }
 
 .main-content {
   display: flex;
-  min-height: calc(100vh - 130px);
+  flex: 1;
   padding: 2rem;
   gap: 2rem;
 }
 
 .sidebar {
   width: 200px;
-  background: #16213e;
   padding: 1.5rem 0;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
   height: fit-content;
 }
 
 .menu-item {
-  padding: 1rem 2rem;
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: #fff;
-  border-left: 4px solid transparent;
+  color: #b9bad3;
+  position: relative;
+  overflow: hidden;
+  gap: 0.8rem;
+  margin: 0.3rem 0;
+  border-radius: 8px;
+}
+
+.menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  background: linear-gradient(to bottom, #e94560, #c23758);
+  transform: scaleY(0);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
 }
 
 .menu-item:hover {
   background: rgba(233, 69, 96, 0.1);
-  color: #e94560;
-  border-left-color: #e94560;
+  color: white;
+  transform: translateX(4px);
+}
+
+.menu-item:hover::before {
+  transform: scaleY(0.7);
+  opacity: 1;
 }
 
 .menu-item.active {
-  background: rgba(233, 69, 96, 0.2);
+  background: rgba(233, 69, 96, 0.15);
   color: #e94560;
-  border-left-color: #e94560;
+  transform: translateX(6px);
+}
+
+.menu-item.active::before {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+.menu-icon {
+  width: 22px;
+  height: 22px;
+  transition: all 0.3s ease;
+  opacity: 0.9;
+}
+
+.menu-item:hover .menu-icon,
+.menu-item.active .menu-icon {
+  transform: scale(1.15);
+  filter: brightness(1.2);
+  opacity: 1;
 }
 
 .content {
   flex: 1;
-  background: #16213e;
-  border-radius: 8px;
   padding: 2rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  overflow-y: auto;
+  max-height: calc(100vh - 200px);
+  border-radius: 12px;
+  position: relative;
+  background: transparent;
+  display: flex;
+  justify-content: center;
+}
+
+.content > * {
+  width: 100%;
+  max-width: 800px;
 }
 
 @media (max-width: 768px) {
   .main-content {
     flex-direction: column;
     padding: 1rem;
+    gap: 1rem;
   }
   
   .sidebar {
     width: 100%;
+    padding: 0.5rem 0;
   }
   
   .content {
-    padding: 1rem;
+    padding: 1.5rem;
+    max-height: none;
   }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(233, 69, 96, 0.5);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(233, 69, 96, 0.7);
 }
 </style>
