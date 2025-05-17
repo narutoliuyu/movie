@@ -17,7 +17,7 @@ const handleVisibilityChange = () => {
   }
 }
 
-// 组件挂载时初始化用户状态
+// 组件挂载时初始化用户状态    查看是否提交成功
 onMounted(async () => {
   try {
     // 初始化用户状态
