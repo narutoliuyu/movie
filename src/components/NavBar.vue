@@ -1,8 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { getApiUrl, API_PATHS, CookieUtil } from '../api/config';
+import { getApiUrl, API_PATHS, CookieUtil, axiosInstance } from '../api/config';
 import { useUserStore } from '../stores/user';
 
 // 导入图标
@@ -49,6 +48,32 @@ const loginError = ref('');
 const registerError = ref('');
 const showUserMenu = ref(false);
 
+// 鼠标是否在搜索框上的标志
+const isMouseOverSearchInput = ref(false);
+
+// 初始化示例数据
+const initExampleData = () => {
+  // 初始化示例搜索历史
+  const exampleHistory = [
+    { id: 1, search_query: '你好-李焕英', search_time: new Date().toISOString() },
+    { id: 2, search_query: '你的婚礼', search_time: new Date().toISOString() },
+    { id: 3, search_query: '刺杀小说家', search_time: new Date().toISOString() }
+  ];
+  localStorage.setItem('searchHistory', JSON.stringify(exampleHistory));
+  
+  // 初始化示例电影排行榜
+  const exampleRankings = [
+    { rank: 1, movie_id: 1, movie: { title: '我不是药神', poster_url: '' } },
+    { rank: 2, movie_id: 2, movie: { title: '孤注一掷', poster_url: '' } },
+    { rank: 3, movie_id: 3, movie: { title: '哪吒之魔童降世', poster_url: '' } },
+    { rank: 4, movie_id: 4, movie: { title: '唐人街探案3', poster_url: '' } },
+    { rank: 5, movie_id: 5, movie: { title: '奇迹-笨小孩', poster_url: '' } }
+  ];
+  localStorage.setItem('movieRankings', JSON.stringify(exampleRankings));
+  
+  console.log('已初始化示例数据');
+};
+
 // NavBar组件挂载时的操作
 onMounted(async () => {
   console.log('NavBar组件挂载 - 当前登录状态:', { 
@@ -60,33 +85,56 @@ onMounted(async () => {
   rememberMe.value = CookieUtil.getCookie('rememberMe') === 'true';
   
   console.log('记住我初始状态:', rememberMe.value);
+  
+  // 清除本地存储中的数据，确保使用后端数据
+  localStorage.removeItem('searchHistory');
+  localStorage.removeItem('movieRankings');
+  
+  // 预加载搜索数据
+  await Promise.all([
+    fetchSearchHistory(),
+    fetchMovieRankings()
+  ]);
+  
+  console.log('预加载数据完成', {
+    searchHistory: searchHistory.value.length,
+    movieRankings: movieRankings.value.length
+  });
 });
 
 // 获取搜索历史
 const fetchSearchHistory = async () => {
-  if (!isLoggedIn.value || !userId.value) return;
-  
   try {
-    const token = CookieUtil.getCookie('token');
     // 打印调试信息
-    console.log('获取搜索历史，userId:', userId.value);
+    console.log('获取搜索历史');
     
-    const response = await axios.get(getApiUrl(API_PATHS.SEARCH.HISTORY), {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { user_id: userId.value }
-    });
-    
-    console.log('搜索历史响应:', response.data);
-    
-    if (response.data.status === 'success') {
-      searchHistory.value = response.data.data;
-      console.log('搜索历史数据:', searchHistory.value);
+    // 尝试从API获取
+    if (isLoggedIn.value && userId.value) {
+      const token = CookieUtil.getCookie('token');
+      try {
+        const response = await axiosInstance.get(getApiUrl(API_PATHS.SEARCH.HISTORY), {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { user_id: userId.value }
+        });
+        
+        console.log('搜索历史响应:', response.data);
+        
+        if (response.data && response.data.status === 'success') {
+          searchHistory.value = response.data.data || [];
+          console.log('API搜索历史数据:', searchHistory.value);
+          return;
+        }
+      } catch (error) {
+        console.error('API获取搜索历史失败:', error);
+      }
     }
+    
+    // 只在未登录或API请求失败时才使用空数组
+    console.log('使用空搜索历史数据');
+    searchHistory.value = [];
   } catch (error) {
-    console.error('获取搜索历史失败:', error);
-    if (error.response) {
-      console.error('错误响应:', error.response.data);
-    }
+    console.error('获取搜索历史总体失败:', error);
+    searchHistory.value = [];
   }
 };
 
@@ -96,34 +144,74 @@ const fetchMovieRankings = async () => {
     // 打印调试信息
     console.log('获取电影排行榜');
     
-    const response = await axios.get(getApiUrl(API_PATHS.SEARCH.RANKINGS));
-    
-    console.log('电影排行榜响应:', response.data);
-    
-    if (response.data.status === 'success') {
-      movieRankings.value = response.data.data;
-      console.log('电影排行榜数据:', movieRankings.value);
+    // 从API获取
+    try {
+      // 先清除本地缓存，确保每次都获取最新数据
+      localStorage.removeItem('movieRankings');
+      
+      const response = await axiosInstance.get(getApiUrl(API_PATHS.SEARCH.RANKINGS));
+      console.log('电影排行榜响应:', response.data);
+      
+      if (response.data && response.data.status === 'success' && response.data.data?.length > 0) {
+        movieRankings.value = response.data.data;
+        console.log('API电影排行榜数据:', movieRankings.value);
+        return;
+      }
+    } catch (error) {
+      console.error('API获取电影排行榜失败:', error);
     }
+    
+    // 只在API请求失败时使用空数组
+    console.log('无法获取排行榜数据，使用空数组');
+    movieRankings.value = [];
   } catch (error) {
-    console.error('获取电影排行榜失败:', error);
-    if (error.response) {
-      console.error('错误响应:', error.response.data);
-    }
+    console.error('获取电影排行榜总体失败:', error);
+    movieRankings.value = [];
   }
 };
 
 // 添加搜索历史
 const addSearchHistory = async (query) => {
-  if (!isLoggedIn.value || !userId.value) return;
-  
   try {
-    const token = CookieUtil.getCookie('token');
-    await axios.post(getApiUrl(API_PATHS.SEARCH.HISTORY), {
-      user_id: userId.value,
-      search_query: query
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    console.log('添加搜索历史:', query);
+    
+    // 创建新的搜索历史项
+    const newHistoryItem = {
+      id: Date.now(), // 生成唯一ID
+      search_query: query,
+      search_time: new Date().toISOString()
+    };
+    
+    // 检查是否已存在相同查询
+    const existingIndex = searchHistory.value.findIndex(item => item.search_query === query);
+    if (existingIndex !== -1) {
+      // 如果存在，则更新时间并移到顶部
+      searchHistory.value.splice(existingIndex, 1);
+    }
+    
+    // 添加到数组开头
+    searchHistory.value.unshift(newHistoryItem);
+    
+    // 限制历史记录数量（最多保留10条）
+    if (searchHistory.value.length > 10) {
+      searchHistory.value = searchHistory.value.slice(0, 10);
+    }
+    
+    // 如果用户已登录，同步到服务器
+    if (isLoggedIn.value && userId.value) {
+      try {
+        const token = CookieUtil.getCookie('token');
+        await axiosInstance.post(getApiUrl(API_PATHS.SEARCH.HISTORY), {
+          user_id: userId.value,
+          search_query: query
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('搜索历史已同步到服务器');
+      } catch (err) {
+        console.log('保存到服务器失败:', err);
+      }
+    }
   } catch (error) {
     console.error('添加搜索历史失败:', error);
   }
@@ -132,13 +220,53 @@ const addSearchHistory = async (query) => {
 // 删除搜索历史
 const deleteSearchHistory = async (historyId) => {
   try {
-    const token = CookieUtil.getCookie('token');
-    await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/${historyId}`), {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    await fetchSearchHistory(); // 重新获取搜索历史
+    console.log('删除搜索历史，ID:', historyId);
+    
+    // 从内存中删除
+    searchHistory.value = searchHistory.value.filter(item => item.id !== historyId);
+    console.log('更新后的搜索历史:', searchHistory.value);
+    
+    // 如果用户已登录，也从服务器删除
+    if (isLoggedIn.value) {
+      const token = CookieUtil.getCookie('token');
+      await axiosInstance.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/${historyId}`), {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => {
+        console.log('从服务器删除失败:', err);
+      });
+    }
   } catch (error) {
     console.error('删除搜索历史失败:', error);
+  }
+};
+
+// 添加鼠标悬停事件处理函数
+const handleSearchHover = () => {
+  console.log('搜索框鼠标悬停');
+  showSearchSuggestions.value = true;
+  
+  // 立即检查并确保有数据
+  if (searchHistory.value.length === 0) {
+    fetchSearchHistory();
+  }
+  
+  if (movieRankings.value.length === 0) {
+    fetchMovieRankings();
+  }
+};
+
+// 处理下拉框的鼠标离开事件
+const handleSearchSuggestionsLeave = (event) => {
+  console.log('下拉框鼠标离开');
+  
+  // 检查鼠标是否离开下拉框但没有进入搜索框
+  // 这里通过检查relatedTarget来判断鼠标去向
+  const searchContainer = event.target.closest('.search-container');
+  if (!searchContainer.contains(event.relatedTarget)) {
+    console.log('鼠标真正离开整个搜索区域，关闭下拉框');
+    showSearchSuggestions.value = false;
+  } else {
+    console.log('鼠标移到搜索框内，保持下拉框显示');
   }
 };
 
@@ -170,15 +298,17 @@ const handleMovieClick = async (movieId, title) => {
   if (isLoggedIn.value) {
     await addSearchHistory(title);
   }
+  console.log(`跳转到电影详情页: /movie/${movieId}, 标题: ${title}`);
   router.push(`/movie/${movieId}`);
   showSearchSuggestions.value = false;
 };
 
 const handleSearch = async () => {
   if (searchQuery.value.trim()) {
-    if (isLoggedIn.value && userId.value) {
-      await addSearchHistory(searchQuery.value.trim());
-    }
+    // 添加到搜索历史
+    await addSearchHistory(searchQuery.value.trim());
+    
+    // 跳转到搜索结果页
     router.push({
       path: '/search',
       query: { q: searchQuery.value.trim() }
@@ -291,7 +421,7 @@ const handleRegister = async () => {
       password: '***' // 不打印实际密码
     });
     
-    const response = await axios.post(getApiUrl(API_PATHS.AUTH.REGISTER), {
+    const response = await axiosInstance.post(getApiUrl(API_PATHS.AUTH.REGISTER), {
       username: username.value,
       email: email.value,
       password: password.value
@@ -360,31 +490,25 @@ const handleMenuClick = (component) => {
 
 // 清空所有搜索历史
 const clearAllSearchHistory = async () => {
-  if (!isLoggedIn.value || !userId.value) return;
-  
   try {
-    const token = CookieUtil.getCookie('token');
-    // 先尝试调用后端接口清空
-    try {
-      await axios.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/clear`), {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { user_id: userId.value }
-      });
-    } catch (err) {
-      console.log('后端可能没有清空接口，将单独删除每条记录');
-      // 如果后端没有提供清空接口，则逐个删除
-      const deletePromises = searchHistory.value.map(history => 
-        deleteSearchHistory(history.id)
-      );
-      await Promise.all(deletePromises);
-    }
+    console.log('清空所有搜索历史');
     
-    // 无论如何都清空前端显示
+    // 清空搜索历史
     searchHistory.value = [];
     console.log('已清空搜索历史');
+    
+    // 如果用户已登录，也清空服务器端
+    if (isLoggedIn.value && userId.value) {
+      const token = CookieUtil.getCookie('token');
+      await axiosInstance.delete(getApiUrl(`${API_PATHS.SEARCH.HISTORY}/clear`), {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { user_id: userId.value }
+      }).catch(err => {
+        console.log('清空服务器搜索历史失败:', err);
+      });
+    }
   } catch (error) {
     console.error('清空搜索历史失败:', error);
-    // 至少清空前端显示
     searchHistory.value = [];
   }
 };
@@ -397,59 +521,61 @@ const clearAllSearchHistory = async () => {
       <h1 class="site-name">黑盒影视</h1>
     </div>
     
-    <div class="search-container">
+    <div class="search-container" 
+        @mouseenter="handleSearchHover">
       <input 
         type="text" 
         v-model="searchQuery" 
         placeholder="搜索电影、演员、导演..." 
         class="search-input"
-        @focus="handleSearchFocus"
-        @blur="handleSearchBlur"
+        @keyup.enter="handleSearch"
       />
       <button @click="handleSearch" class="search-button">搜索</button>
       
       <!-- 搜索建议下拉框 -->
-      <div v-if="showSearchSuggestions" class="search-suggestions">
+      <div v-if="showSearchSuggestions" class="search-suggestions" @mouseleave="handleSearchSuggestionsLeave">
         <!-- 搜索历史 -->
-        <div v-if="isLoggedIn && searchHistory.length > 0" class="suggestion-section">
+        <div v-if="searchHistory.length > 0" class="suggestion-section">
           <div class="section-header">
             <h4>搜索历史</h4>
             <button class="clear-history" @click="clearAllSearchHistory">清空</button>
           </div>
-          <div 
-            v-for="history in searchHistory" 
-            :key="history.id"
-            class="suggestion-item"
-          >
-            <div class="suggestion-content" @click="handleSuggestionClick(history.search_query)">
-              <img src="../assets/历史记录.png" alt="历史" class="suggestion-icon" />
-              <span>{{ history.search_query }}</span>
-            </div>
-            <button 
-              class="delete-history"
-              @click.stop="deleteSearchHistory(history.id)"
+          <div class="history-items-container">
+            <div 
+              v-for="history in searchHistory" 
+              :key="history.id"
+              class="history-item"
             >
-              ×
-            </button>
+              <div class="suggestion-content" @click="handleSuggestionClick(history.search_query)">
+                <img src="../assets/历史记录.png" alt="历史" class="suggestion-icon" />
+                <span>{{ history.search_query }}</span>
+              </div>
+              <button 
+                class="delete-history"
+                @click.stop="deleteSearchHistory(history.id)"
+              >
+                ×
+              </button>
+            </div>
           </div>
         </div>
         
         <!-- 电影排行榜 -->
         <div v-if="movieRankings.length > 0" class="suggestion-section">
-          <h4>热门电影</h4>
+          <h4 class="section-title">热搜电影</h4>
           <div 
             v-for="ranking in movieRankings" 
-            :key="ranking.id"
+            :key="ranking.rank || ranking.movie_id || ranking.movie?.id"
             class="suggestion-item"
-            @click="handleMovieClick(ranking.movie_id, ranking.movie.title)"
+            @click="handleMovieClick(ranking.movie_id || ranking.movie?.id, ranking.movie?.title)"
           >
-            <span class="rank-number">{{ ranking.rank }}</span>
-            <span>{{ ranking.movie.title }}</span>
+            <span class="rank-number" :class="`rank-${ranking.rank <= 3 ? ranking.rank : 'normal'}`">{{ ranking.rank }}</span>
+            <span>{{ ranking.movie?.title }}</span>
           </div>
         </div>
 
         <!-- 无数据提示 -->
-        <div v-if="(!isLoggedIn || searchHistory.length === 0) && movieRankings.length === 0" class="no-data">
+        <div v-if="searchHistory.length === 0 && movieRankings.length === 0" class="no-data">
           暂无数据
         </div>
       </div>
@@ -674,13 +800,12 @@ const clearAllSearchHistory = async () => {
   border-radius: 25px;
   overflow: visible;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s ease;
   background: #111431;
 }
 
+/* 移除悬停时的上移效果 */
 .search-container:hover {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
-  transform: translateY(-2px);
 }
 
 .search-input {
@@ -718,9 +843,9 @@ const clearAllSearchHistory = async () => {
   box-shadow: 0 2px 10px rgba(233, 69, 96, 0.3);
 }
 
+/* 移除悬停时的上移效果 */
 .search-button:hover {
   background: linear-gradient(135deg, #e94560, #aa2a49);
-  transform: translateX(2px);
   box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
 }
 
@@ -1079,6 +1204,7 @@ const clearAllSearchHistory = async () => {
   padding: 1rem;
   z-index: 1000;
   backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .suggestion-section {
@@ -1092,10 +1218,11 @@ const clearAllSearchHistory = async () => {
   margin-bottom: 0.5rem;
 }
 
-.section-header h4 {
+.section-header h4, .section-title {
   margin: 0;
   font-size: 1rem;
   color: #e94560;
+  text-align: left;
 }
 
 .clear-history {
@@ -1106,9 +1233,41 @@ const clearAllSearchHistory = async () => {
   font-size: 0.875rem;
 }
 
+/* 搜索历史横向排列 */
+.history-items-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.suggestion-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.suggestion-icon {
+  width: 16px;
+  height: 16px;
+}
+
 .suggestion-item {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   padding: 0.5rem;
   cursor: pointer;
@@ -1119,31 +1278,38 @@ const clearAllSearchHistory = async () => {
 
 .suggestion-item:hover {
   background-color: rgba(233, 69, 96, 0.1);
-  transform: translateX(4px);
 }
 
-.suggestion-content {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.suggestion-icon {
-  width: 20px;
-  height: 20px;
-}
-
+/* 排名数字样式 */
 .rank-number {
-  font-size: 0.875rem;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
   font-weight: bold;
-  margin-right: 0.5rem;
-  color: #e94560;
+  border-radius: 50%;
 }
 
-.no-data {
-  text-align: center;
-  color: #b9bad3;
-  padding: 1rem;
+.rank-1 {
+  background: linear-gradient(135deg, #ff9a00, #ff6a00);
+  color: white;
+}
+
+.rank-2 {
+  background: linear-gradient(135deg, #c0c0c0, #a9a9a9);
+  color: white;
+}
+
+.rank-3 {
+  background: linear-gradient(135deg, #cd853f, #8b4513);
+  color: white;
+}
+
+.rank-normal {
+  background: rgba(255, 255, 255, 0.1);
+  color: #aaa;
 }
 
 .delete-history {
@@ -1151,19 +1317,23 @@ const clearAllSearchHistory = async () => {
   border: none;
   color: #aaa;
   cursor: pointer;
-  font-size: 1.2rem;
-  padding: 4px 8px;
-  border-radius: 4px;
-  opacity: 0;
+  font-size: 1rem;
+  margin-left: 6px;
+  opacity: 0.7;
   transition: all 0.3s ease;
 }
 
-.suggestion-item:hover .delete-history {
+.history-item:hover .delete-history {
   opacity: 1;
 }
 
 .delete-history:hover {
   color: #e94560;
-  background: rgba(233, 69, 96, 0.1);
+}
+
+.no-data {
+  text-align: center;
+  color: #b9bad3;
+  padding: 1rem;
 }
 </style> 

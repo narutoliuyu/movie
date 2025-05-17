@@ -44,6 +44,7 @@ const API_PATHS = {
     PROFILE: '/api/auth/profile'
   },
   SEARCH: {
+    MAIN: '/api/search',  // 添加主搜索路径
     HISTORY: '/api/search/history',
     RANKINGS: '/api/search/rankings'
   },
@@ -167,6 +168,49 @@ axiosInstance.interceptors.response.use(
             token: 'test_token_12345',
             user_id: 1,
             username: error.config.data ? JSON.parse(error.config.data).username : '测试用户'
+          }
+        });
+      }
+      
+      // 处理搜索请求
+      if (url.includes('/api/search') && !url.includes('/history') && !url.includes('/rankings')) {
+        console.log('返回模拟搜索结果数据');
+        // 尝试从URL中提取搜索查询
+        const searchParams = new URLSearchParams(url.split('?')[1] || '');
+        const query = searchParams.get('query') || '未知搜索';
+        
+        // 生成随机数量的搜索结果（3-8个）
+        const resultCount = Math.floor(Math.random() * 6) + 3;
+        
+        // 电影类型列表
+        const movieTypes = [
+          '动作/冒险', '剧情/科幻', '喜剧/爱情', '恐怖/惊悚', '动画/家庭',
+          '犯罪/悬疑', '历史/传记', '奇幻/冒险', '战争/历史', '音乐/歌舞'
+        ];
+        
+        // 生成随机年份
+        const generateYear = () => (Math.floor(Math.random() * 30) + 1990).toString();
+        
+        // 生成随机评分
+        const generateRating = () => (Math.floor(Math.random() * 30) + 60) / 10;
+        
+        // 生成搜索结果
+        const movies = Array.from({ length: resultCount }, (_, i) => ({
+          id: 100 + i,
+          title: `${query} ${['相关影片', '系列电影', '同类作品', '推荐观看'][Math.floor(Math.random() * 4)]} ${i + 1}`,
+          poster_url: `https://via.placeholder.com/300x450/1a1a2e/ffffff?text=${query}${i+1}`,
+          release_date: generateYear(),
+          movie_type: movieTypes[Math.floor(Math.random() * movieTypes.length)],
+          rating: generateRating().toFixed(1)
+        }));
+        
+        return Promise.resolve({
+          data: {
+            status: 'success',
+            data: {
+              total: resultCount,
+              movies: movies
+            }
           }
         });
       }

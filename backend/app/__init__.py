@@ -8,6 +8,7 @@ from .routes.auth import auth_bp
 from .routes.categories import categories_bp
 from .routes.user import user_bp
 from .routes.history import history_bp
+from .routes.search import bp as search_bp
 from flask_jwt_extended import JWTManager
 
 # 删除临时的auth_bp蓝图
@@ -60,6 +61,7 @@ def create_app():
     app.register_blueprint(categories_bp, url_prefix='/api')
     app.register_blueprint(user_bp)
     app.register_blueprint(history_bp)
+    app.register_blueprint(search_bp, url_prefix='/api')
     
     # 添加开发环境信息中间件
     @app.before_request
