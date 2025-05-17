@@ -62,6 +62,18 @@ def delete_search_history(history_id):
     db.session.commit()
     return jsonify({'status': 'success', 'message': '搜索记录已删除'})
 
+@bp.route('/search/history/clear', methods=['DELETE'])
+def clear_search_history():
+    user_id = request.args.get('user_id')
+    if not user_id:
+        return jsonify({'status': 'error', 'message': '用户ID不能为空'}), 400
+    
+    # 删除指定用户的所有搜索历史
+    SearchHistory.query.filter_by(user_id=user_id).delete()
+    db.session.commit()
+    
+    return jsonify({'status': 'success', 'message': '搜索历史已清空'})
+
 @bp.route('/search/rankings', methods=['GET'])
 def get_movie_rankings():
     rankings = MovieRanking.query.order_by(MovieRanking.rank.asc()).limit(8).all()
