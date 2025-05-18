@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, onUnmounted, shallowRef } from 'vue';
+import { ref, onMounted, computed, onUnmounted, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import NavBar from '../components/NavBar.vue';
@@ -132,57 +132,51 @@ const processMovieData = (allMovies) => {
       similarMovies.value = allMovies
         .filter(m => m.id !== movie.value.id)
         .slice(0, 5);
+    } else if (filteredMovies.length < 5) {
+      // 如果同类型电影不足5部，则补充其他类型电影
+      const otherMovies = allMovies.filter(m => 
+        m.id !== movie.value.id && 
+        m.movie_type !== movie.value.movie_type
+      );
+      
+      similarMovies.value = [
+        ...filteredMovies,
+        ...otherMovies.slice(0, 5 - filteredMovies.length)
+      ];
     } else {
       // 最多取5部相同类型的电影
       similarMovies.value = filteredMovies.slice(0, 5);
     }
+    
+    // 确保始终有5个推荐，如果数据不足则使用备用数据补充
+    if (similarMovies.value.length < 5) {
+      const missingCount = 5 - similarMovies.value.length;
+      const backupMovies = generateBackupMovies(missingCount);
+      similarMovies.value = [...similarMovies.value, ...backupMovies];
+    }
   });
+};
+
+// 生成备用电影数据
+const generateBackupMovies = (count) => {
+  const result = [];
+  for (let i = 0; i < count; i++) {
+    result.push({
+      id: 10000 + i,
+      title: `推荐电影${i + 1}`,
+      poster_url: `https://via.placeholder.com/300x450/13173a/ffffff?text=推荐电影${i + 1}`,
+      director: `导演${String.fromCharCode(65 + i)}`,
+      release_date: `${2023 - i}`,
+      movie_type: movie.value?.movie_type || '动作'
+    });
+  }
+  return result;
 };
 
 // 使用备用数据
 const useFallbackMovies = () => {
-  similarMovies.value = [
-    {
-      id: 101,
-      title: '相似电影1',
-      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影1',
-      director: '导演A',
-      release_date: '2023',
-      movie_type: movie.value?.movie_type || '动作'
-    },
-    {
-      id: 102,
-      title: '相似电影2',
-      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影2',
-      director: '导演B',
-      release_date: '2022',
-      movie_type: movie.value?.movie_type || '动作'
-    },
-    {
-      id: 103,
-      title: '相似电影3',
-      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影3',
-      director: '导演C',
-      release_date: '2021',
-      movie_type: movie.value?.movie_type || '动作'
-    },
-    {
-      id: 104,
-      title: '相似电影4',
-      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影4',
-      director: '导演D',
-      release_date: '2020',
-      movie_type: movie.value?.movie_type || '动作'
-    },
-    {
-      id: 105,
-      title: '相似电影5',
-      poster_url: 'https://via.placeholder.com/300x450/13173a/ffffff?text=相似电影5',
-      director: '导演E',
-      release_date: '2019',
-      movie_type: movie.value?.movie_type || '动作'
-    }
-  ];
+  // 直接生成5个备用电影数据
+  similarMovies.value = generateBackupMovies(5);
 };
 
 const fetchMovieDetails = async () => {
@@ -443,6 +437,20 @@ const closeVideo = () => {
 
 onMounted(() => {
   fetchMovieDetails();
+});
+
+// 监听路由参数变化，当电影ID变化时重新获取电影详情
+watch(() => route.params.id, (newId, oldId) => {
+  if (newId !== oldId) {
+    console.log(`电影ID从${oldId}变为${newId}，重新获取电影详情`);
+    // 重置状态
+    movie.value = null;
+    similarMovies.value = [];
+    // 重新获取电影详情
+    fetchMovieDetails();
+    // 滚动到页面顶部
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 });
 </script>
 
