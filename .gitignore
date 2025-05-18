@@ -2,6 +2,11 @@
 node_modules/
 dist/
 .vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm/
 
 # Python
 __pycache__/
@@ -13,12 +18,43 @@ __pycache__/
 *.log
 .venv/
 .env
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+coverage/
+htmlcov/
 
 # IDE
 .vscode/
 .idea/
+*.sublime-project
+*.sublime-workspace
+.vs/
+*.code-workspace
 
 # System
 .DS_Store
 Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# Build output
+build/
+dist-ssr/
+
+# Environment
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+debug.log
+npm-debug.log*
+
+# Temporary files
+*.bak
+*.tmp
+*.temp
 
