@@ -27,27 +27,7 @@ export const useUserStore = defineStore('user', () => {
       rememberMe: rememberMeEnabled 
     })
     
-    // 开发环境下总是创建测试用户状态
-    if (import.meta.env.DEV) {
-      console.log('开发环境：确保测试登录状态')
-      // 设置测试用登录状态
-      isLoggedIn.value = true
-      userId.value = '1'
-      username.value = storedUsername || '测试用户'
-      token.value = storedToken || 'test_token_12345'
-      
-      // 保存到Cookie
-      CookieUtil.setCookie('token', token.value, 1)
-      CookieUtil.setCookie('user_id', userId.value, 1)
-      CookieUtil.setCookie('username', username.value, 1)
-      
-      // 设置axios请求头
-      axiosInstance.defaults.headers.common['Authorization'] = `Bearer ${token.value}`
-      console.log('已确保测试登录状态:', { userId: userId.value, username: username.value })
-      return
-    }
-    
-    // 生产环境下，如果Cookie中有token和userId，设置为已登录状态
+    // 如果Cookie中有token和userId，设置为已登录状态
     if (storedToken && storedUserId) {
       isLoggedIn.value = true
       userId.value = storedUserId
@@ -59,7 +39,7 @@ export const useUserStore = defineStore('user', () => {
       
       console.log('已恢复登录状态:', isLoggedIn.value)
     } else {
-      // 生产环境下清除登录状态
+      // 清除登录状态
       isLoggedIn.value = false
       userId.value = null
       username.value = ''
@@ -77,13 +57,22 @@ export const useUserStore = defineStore('user', () => {
       CookieUtil.deleteCookie('username')
       CookieUtil.deleteCookie('rememberMe')
       
+      console.log('准备发送登录请求:', {url: getApiUrl(API_PATHS.AUTH.LOGIN), user})
+      
       const response = await axiosInstance.post(getApiUrl(API_PATHS.AUTH.LOGIN), {
         username: user,
         password
       })
       
+      console.log('登录请求响应:', response.data)
+      
       if (response.data.status === 'success') {
         const { token: newToken, user_id } = response.data
+        
+        console.log('登录成功, 提取token和user_id:', {
+          token: newToken ? '已获取' : '未获取',
+          user_id: user_id
+        })
         
         // 存储登录状态
         isLoggedIn.value = true
@@ -118,9 +107,16 @@ export const useUserStore = defineStore('user', () => {
       }
     } catch (error) {
       console.error('登录失败:', error)
+      
+      // 添加更详细的错误信息
+      if (error.response) {
+        console.error('服务器响应:', error.response.data)
+        console.error('状态码:', error.response.status)
+      }
+      
       return { 
         success: false, 
-        message: error.response?.data?.message || '登录失败，请稍后重试'
+        message: error.response?.data?.message || error.message || '登录失败，请稍后重试'
       }
     }
   }

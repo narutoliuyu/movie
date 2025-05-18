@@ -92,8 +92,8 @@ const goToHome = () => {
 }
 
 .center-content {
-  padding-top: 90px;
-  min-height: calc(100vh - 90px);
+  padding-top: 80px;
+  min-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
 }
@@ -101,7 +101,8 @@ const goToHome = () => {
 .back-home {
   display: flex;
   align-items: center;
-  padding: 1rem 2rem;
+  padding: 0.8rem 2rem;
+  margin-bottom: 0.2rem;
   cursor: pointer;
   transition: all 0.3s ease;
   color: #b9bad3;
@@ -122,13 +123,17 @@ const goToHome = () => {
 .main-content {
   display: flex;
   flex: 1;
-  padding: 2rem;
+  padding-top: 1rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
   gap: 2rem;
 }
 
 .sidebar {
   width: 200px;
-  padding: 1.5rem 0;
+  padding-top: 1rem;
+  padding-bottom: 1.5rem;
   height: fit-content;
 }
 
@@ -197,19 +202,46 @@ const goToHome = () => {
 
 .content {
   flex: 1;
-  padding: 2rem;
+  padding-top: 1rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
   overflow-y: auto;
-  max-height: calc(100vh - 200px);
+  max-height: calc(100vh - 170px);
   border-radius: 12px;
   position: relative;
   background: transparent;
   display: flex;
   justify-content: center;
+  transition: all 0.3s ease;
 }
 
+/* 普通组件宽度限制 */
 .content > * {
   width: 100%;
   max-width: 800px;
+  transition: max-width 0.3s ease;
+}
+
+/* 收藏和历史组件使用更大宽度 */
+.content > .favorites-component,
+.content > .history-component {
+  width: 100%;
+  max-width: 1200px;
+}
+
+/* 在大屏幕上提供更宽阔的显示 */
+@media (min-width: 1440px) {
+  .content > .favorites-component,
+  .content > .history-component {
+    max-width: 1400px;
+  }
+}
+
+/* 调整网格布局 */
+.content .favorites-grid,
+.content .history-grid {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
 }
 
 @media (max-width: 768px) {

@@ -10,6 +10,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     avatar = db.Column(db.String(255), nullable=True)
+    is_vip = db.Column(db.Integer, default=0)  # 使用is_vip字段，0表示普通用户，1表示VIP
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -25,6 +26,7 @@ class User(db.Model):
             'username': self.username,
             'email': self.email,
             'avatar': self.avatar,
+            'is_vip': self.is_vip,  # 返回is_vip字段值
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S')
         } 

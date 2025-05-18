@@ -43,6 +43,7 @@ export const clearLoginState = () => {
 export const login = async (username, password, rememberMe = false) => {
   try {
     console.log('登录请求参数:', { username, rememberMe: !!rememberMe });
+    console.log('登录请求URL:', getApiUrl(API_PATHS.AUTH.LOGIN));
     
     // 先清除可能的旧状态
     clearLoginState();
@@ -51,6 +52,8 @@ export const login = async (username, password, rememberMe = false) => {
       username, 
       password
     });
+    
+    console.log('登录响应:', response.data);
     
     if (response.data && response.data.status === 'success') {
       // 获取token和user_id
@@ -91,9 +94,16 @@ export const login = async (username, password, rememberMe = false) => {
     }
   } catch (error) {
     console.error('登录请求失败:', error);
+    
+    // 添加更多错误信息
+    if (error.response) {
+      console.error('错误响应:', error.response.data);
+      console.error('错误状态:', error.response.status);
+    }
+    
     return { 
       success: false, 
-      message: error.response?.data?.message || '登录失败，请稍后重试'
+      message: error.response?.data?.message || error.message || '登录失败，请稍后重试'
     };
   }
 };

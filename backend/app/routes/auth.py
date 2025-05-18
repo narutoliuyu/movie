@@ -30,32 +30,8 @@ def login():
         # 查找用户
         user = User.query.filter_by(username=username).first()
         
-        # 模拟用户 - 开发环境使用
-        if not user and username == '测试用户':
-            user = User(
-                username='测试用户',
-                email='test@example.com',
-                password_hash=generate_password_hash('password123')
-            )
-            db.session.add(user)
-            db.session.commit()
-        
         # 验证用户
         if not user or not check_password_hash(user.password_hash, password):
-            # 开发环境自动验证成功
-            if 'DEV' in request.headers.get('User-Agent', ''):
-                # 开发环境默认成功
-                access_token = create_access_token(
-                    identity=1,  # 测试用户ID
-                    expires_delta=timedelta(days=1)
-                )
-                return jsonify({
-                    'status': 'success',
-                    'token': access_token,
-                    'user_id': 1,
-                    'username': username or '测试用户'
-                })
-            
             return jsonify({
                 'status': 'error',
                 'message': '用户名或密码错误'
@@ -75,15 +51,6 @@ def login():
         })
         
     except Exception as e:
-        # 开发环境返回成功
-        if 'DEV' in request.headers.get('User-Agent', ''):
-            return jsonify({
-                'status': 'success',
-                'token': 'test_token_12345',
-                'user_id': 1,
-                'username': '测试用户'
-            })
-            
         return jsonify({
             'status': 'error',
             'message': f'登录失败: {str(e)}'

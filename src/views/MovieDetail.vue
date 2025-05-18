@@ -305,12 +305,12 @@ const toggleFavorite = async () => {
       }
     }
     
-    // 显示操作成功的提示
-    const toastText = isFavorite.value ? '已添加到收藏' : '已从收藏中移除';
-    showToast(toastText);
+    // 不再显示Toast提示
+    // 页面状态已通过isFavorite更新，即可显示收藏状态
     
   } catch (err) {
     console.error('操作收藏失败:', err);
+    // 操作失败时仍然显示提示
     showToast('操作失败，请重试');
   }
 };
@@ -405,13 +405,27 @@ const saveToLocalStorage = (historyItem) => {
 };
 
 const goBack = () => {
-  // 保存当前电影ID以便返回首页后能找到这个位置
-  if (movie.value) {
-    sessionStorage.setItem('lastViewedMovieId', movie.value.id);
-    // 清除上次保存的滚动位置，确保使用电影ID定位
-    sessionStorage.removeItem('homeScrollPosition');
+  // 检查是否是从个人中心页面进入的
+  const fromCenter = sessionStorage.getItem('fromCenterComponent');
+  
+  if (fromCenter) {
+    // 如果是从个人中心页面进入的，返回个人中心页面并恢复之前的组件
+    router.push({
+      path: '/center',
+      query: { component: fromCenter }
+    });
+    // 清除标记
+    sessionStorage.removeItem('fromCenterComponent');
+  } else {
+    // 常规返回逻辑
+    // 保存当前电影ID以便返回首页后能找到这个位置
+    if (movie.value) {
+      sessionStorage.setItem('lastViewedMovieId', movie.value.id);
+      // 清除上次保存的滚动位置，确保使用电影ID定位
+      sessionStorage.removeItem('homeScrollPosition');
+    }
+    router.back();
   }
-  router.back();
 };
 
 const goToHome = () => {
@@ -528,6 +542,7 @@ watch(() => route.params.id, (newId, oldId) => {
                 @click.stop="toggleFavorite"
               >
                 <span class="heart-icon">❤</span>
+                <span v-if="isFavorite" class="favorite-text">已收藏</span>
               </button>
               
               <!-- 悬停时显示的海报覆盖层 -->
@@ -968,36 +983,60 @@ body {
   position: absolute;
   top: 15px;
   right: 15px;
-  width: 40px;
   height: 40px;
-  border-radius: 50%;
-  background: rgba(15, 17, 41, 0.7);
+  min-width: 40px;
+  border-radius: 50px;
+  background: rgba(15, 17, 41, 0.8);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 3;
-  opacity: 0;
-  transform: translateY(10px);
+  opacity: 1;
+  transform: translateY(0);
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  padding: 0 15px 0 12px;
+}
+
+.favorite-btn.active {
+  width: auto;
+  padding-right: 15px;
+  background: rgba(233, 69, 96, 0.15);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+}
+
+.favorite-text {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 14px;
+  color: #e94560;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .movie-poster:hover .favorite-btn {
-  opacity: 1;
-  transform: translateY(0);
+  background: rgba(15, 17, 41, 0.9);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+.favorite-btn.active:hover {
+  background: rgba(233, 69, 96, 0.25);
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.25);
 }
 
 .heart-icon {
   font-size: 20px;
-  color: #8f8f9f;
+  color: rgba(255, 255, 255, 0.7);
   transition: all 0.3s ease;
 }
 
 .favorite-btn.active .heart-icon {
   color: #e94560;
   text-shadow: 0 0 10px rgba(233, 69, 96, 0.7);
+  transform: scale(1.1);
 }
 
 .favorite-btn:hover .heart-icon {

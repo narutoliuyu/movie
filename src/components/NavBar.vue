@@ -51,6 +51,47 @@ const showUserMenu = ref(false);
 // 鼠标是否在搜索框上的标志
 const isMouseOverSearchInput = ref(false);
 
+// 检查用户是否是VIP
+const isUserVip = computed(() => {
+  // 假设用户数据中有is_vip字段，1表示是VIP
+  const userData = localStorage.getItem('userData');
+  if (userData) {
+    try {
+      const userObj = JSON.parse(userData);
+      return userObj.is_vip === 1;
+    } catch (e) {
+      console.error('解析用户数据失败:', e);
+      return false;
+    }
+  }
+  return false;
+});
+
+// 添加fetchUserData函数
+const fetchUserData = async () => {
+  if (!userStore.isLoggedIn || !userStore.userId) return;
+  
+  try {
+    const token = CookieUtil.getCookie('token');
+    if (!token) return;
+    
+    console.log('获取用户资料数据');
+    const response = await axiosInstance.get(getApiUrl('/api/user/profile'), {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    if (response.data.status === 'success' && response.data.data) {
+      console.log('用户资料数据:', response.data.data);
+      // 保存用户数据到本地存储
+      localStorage.setItem('userData', JSON.stringify(response.data.data));
+      // 强制重新计算isUserVip
+      isUserVip.value = response.data.data.is_vip === 1;
+    }
+  } catch (err) {
+    console.error('获取用户资料失败:', err);
+  }
+};
+
 // 初始化示例数据
 const initExampleData = () => {
   // 初始化示例搜索历史
@@ -90,6 +131,11 @@ onMounted(async () => {
   localStorage.removeItem('searchHistory');
   localStorage.removeItem('movieRankings');
   
+  // 获取用户数据
+  if (userStore.isLoggedIn) {
+    await fetchUserData();
+  }
+  
   // 预加载搜索数据
   await Promise.all([
     fetchSearchHistory(),
@@ -98,7 +144,8 @@ onMounted(async () => {
   
   console.log('预加载数据完成', {
     searchHistory: searchHistory.value.length,
-    movieRankings: movieRankings.value.length
+    movieRankings: movieRankings.value.length,
+    isVip: isUserVip.value
   });
 });
 
@@ -150,18 +197,37 @@ const fetchMovieRankings = async () => {
       localStorage.removeItem('movieRankings');
       
       const response = await axiosInstance.get(getApiUrl(API_PATHS.SEARCH.RANKINGS));
-      console.log('电影排行榜响应:', response.data);
+      console.log('电影排行榜原始响应:', response.data);
       
       if (response.data && response.data.status === 'success' && response.data.data?.length > 0) {
-        movieRankings.value = response.data.data;
-        console.log('API电影排行榜数据:', movieRankings.value);
+        // 处理数据，确保每个项目有必要的字段
+        movieRankings.value = response.data.data.map(item => {
+          // 只在movie对象完全不存在时才创建新对象
+          if (!item.movie) {
+            console.log(`排名${item.rank}没有movie对象，创建默认对象`);
+            item.movie = { 
+              id: item.movie_id, 
+              title: `电影${item.rank}` 
+            };
+          } else if (!item.movie.title) {
+            // 只在title不存在时才添加默认title
+            console.log(`排名${item.rank}的movie对象没有title，添加默认title`);
+            item.movie.title = `电影${item.rank}`;
+          } else {
+            // 打印已有的title
+            console.log(`排名${item.rank}的电影标题: ${item.movie.title}`);
+          }
+          return item;
+        });
+        
+        console.log('处理后的电影排行榜数据:', movieRankings.value);
         return;
       }
     } catch (error) {
       console.error('API获取电影排行榜失败:', error);
     }
     
-    // 只在API请求失败时使用空数组
+    // API请求失败时使用空数组
     console.log('无法获取排行榜数据，使用空数组');
     movieRankings.value = [];
   } catch (error) {
@@ -293,13 +359,24 @@ const handleSuggestionClick = (query) => {
   handleSearch();
 };
 
-// 处理电影点击
+// 处理电影点击 - 修改为搜索功能
 const handleMovieClick = async (movieId, title) => {
+  if (!title) return;
+  
+  // 添加到搜索历史
   if (isLoggedIn.value) {
     await addSearchHistory(title);
   }
-  console.log(`跳转到电影详情页: /movie/${movieId}, 标题: ${title}`);
-  router.push(`/movie/${movieId}`);
+  
+  // 更新搜索框的值
+  searchQuery.value = title;
+  
+  // 跳转到搜索结果页
+  router.push({
+    path: '/search',
+    query: { q: title }
+  });
+  
   showSearchSuggestions.value = false;
 };
 
@@ -333,11 +410,19 @@ const handleLogin = async () => {
     // 先清除任何可能存在的旧状态
     userStore.logout();
     
+    // 添加更多的调试日志
+    console.log('发送登录请求到:', getApiUrl(API_PATHS.AUTH.LOGIN));
+    
     // 然后进行新的登录
     const result = await userStore.login(username.value, password.value, rememberMe.value);
 
+    console.log('登录结果:', result);
+
     if (result.success) {
       console.log('登录成功，用户ID:', result.userId);
+      
+      // 登录成功后立即获取用户资料
+      await fetchUserData();
       
       // 关闭登录模态框前确保状态已更新
       setTimeout(() => {
@@ -350,9 +435,14 @@ const handleLogin = async () => {
       }, 300);
     } else {
       loginError.value = result.message || '登录失败，请稍后重试';
+      console.error('登录失败原因:', result.message);
     }
   } catch (error) {
     console.error('登录请求失败:', error);
+    if (error.response) {
+      console.error('错误响应:', error.response.data);
+      console.error('错误状态:', error.response.status);
+    }
     loginError.value = '登录过程中出现错误，请稍后重试';
   }
 };
@@ -421,6 +511,8 @@ const handleRegister = async () => {
       password: '***' // 不打印实际密码
     });
     
+    console.log('注册请求URL:', getApiUrl(API_PATHS.AUTH.REGISTER));
+    
     const response = await axiosInstance.post(getApiUrl(API_PATHS.AUTH.REGISTER), {
       username: username.value,
       email: email.value,
@@ -433,21 +525,24 @@ const handleRegister = async () => {
       // 注册成功后自动登录
       console.log('注册成功，开始自动登录');
       
-      // 使用auth.js中的登录函数，确保使用Cookie存储
-      const result = await authLogin(username.value, password.value, rememberMe.value);
+      // 使用store的登录函数
+      const result = await userStore.login(username.value, password.value, rememberMe.value);
+      console.log('登录结果:', result);
       
       if (result.success) {
         // 更新组件状态
-        isLoggedIn.value = true;
-        userId.value = result.userId;
         showRegisterModal.value = false;
-        showLoginModal.value = false;
         // 清空表单
         username.value = '';
         email.value = '';
         password.value = '';
         confirmPassword.value = '';
+      } else {
+        registerError.value = '注册成功，但自动登录失败，请手动登录';
+        console.error('自动登录失败:', result.message);
       }
+    } else {
+      registerError.value = response.data.message || '注册失败，请稍后重试';
     }
   } catch (error) {
     console.error('注册失败:', error);
@@ -565,12 +660,12 @@ const clearAllSearchHistory = async () => {
           <h4 class="section-title">热搜电影</h4>
           <div 
             v-for="ranking in movieRankings" 
-            :key="ranking.rank || ranking.movie_id || ranking.movie?.id"
-            class="suggestion-item"
-            @click="handleMovieClick(ranking.movie_id || ranking.movie?.id, ranking.movie?.title)"
+            :key="ranking.rank || ranking.movie_id || ranking.id"
+            class="suggestion-item clickable"
+            @click="handleMovieClick(ranking.movie_id, ranking.movie.title)"
           >
             <span class="rank-number" :class="`rank-${ranking.rank <= 3 ? ranking.rank : 'normal'}`">{{ ranking.rank }}</span>
-            <span>{{ ranking.movie?.title }}</span>
+            <span>{{ ranking.movie.title }}</span>
           </div>
         </div>
 
@@ -586,9 +681,9 @@ const clearAllSearchHistory = async () => {
         <div class="user-menu" v-click-outside="() => showUserMenu = false">
           <button @click="toggleUserMenu" class="user-menu-button">
             <div class="user-info-display">
-              <img :src="userIcon" alt="用户" class="user-avatar" />
-              <span class="username">{{ userStore.username}}</span>
-              <img src="../assets/会员.png" alt="VIP" class="vip-icon" />
+              <img src="../assets/xiaoxin.gif" alt="用户" class="user-avatar" />
+              <span :class="['username', {'username-vip': isUserVip}]">{{ userStore.username}}</span>
+              <img v-if="isUserVip" src="../assets/会员.png" alt="VIP" class="vip-icon" />
             </div>
           </button>
           
@@ -933,6 +1028,7 @@ const clearAllSearchHistory = async () => {
   object-fit: cover;
 }
 
+/* 用户名样式 */
 .username {
   font-size: 16px;
   font-weight: 500;
@@ -940,6 +1036,11 @@ const clearAllSearchHistory = async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #ffffff; /* 普通用户使用白色 */
+}
+
+/* VIP用户使用炫彩渐变效果 */
+.username-vip {
   background: linear-gradient(90deg, #e94560, #ff6b9b, #5271ff, #e94560);
   background-size: 300% 100%;
   -webkit-background-clip: text;
@@ -1276,8 +1377,17 @@ const clearAllSearchHistory = async () => {
   border-radius: 6px;
 }
 
-.suggestion-item:hover {
+.suggestion-item.clickable {
+  cursor: pointer;
+}
+
+.suggestion-item.clickable:hover {
   background-color: rgba(233, 69, 96, 0.1);
+}
+
+.suggestion-item:not(.clickable) {
+  cursor: default;
+  opacity: 0.7;
 }
 
 /* 排名数字样式 */

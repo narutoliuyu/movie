@@ -44,20 +44,7 @@ const fetchUserData = async () => {
     
     // 检查用户登录状态
     if (!userStore.isLoggedIn || !userStore.userId) {
-      console.warn('未登录或用户ID不存在，使用模拟数据');
-      
-      // 在开发环境中使用模拟数据
-      if (import.meta.env.DEV) {
-        userInfo.value = {
-          username: '测试用户',
-          email: 'test@example.com',
-          created_at: new Date().toLocaleDateString(),
-          avatar: localStorage.getItem('userAvatar') || ''
-        };
-        loading.value = false;
-        return;
-      }
-      
+      console.warn('未登录或用户ID不存在');
       error.value = '请先登录后查看个人信息';
       loading.value = false;
       return;
@@ -72,19 +59,6 @@ const fetchUserData = async () => {
     const token = CookieUtil.getCookie('token');
     if (!token) {
       console.error('Token不存在，用户可能需要重新登录');
-      
-      // 在开发环境中使用模拟数据
-      if (import.meta.env.DEV) {
-        userInfo.value = {
-          username: userStore.username || '测试用户',
-          email: 'test@example.com',
-          created_at: new Date().toLocaleDateString(),
-          avatar: localStorage.getItem('userAvatar') || ''
-        };
-        loading.value = false;
-        return;
-      }
-      
       error.value = '登录已过期，请重新登录';
       loading.value = false;
       return;
@@ -124,21 +98,9 @@ const fetchUserData = async () => {
           console.log('通过/api/users?user_id=获取数据成功');
         } catch (err3) {
           console.error('所有API路径尝试失败', err3);
-          
-          // API请求全部失败时，在开发环境中使用模拟数据
-          if (import.meta.env.DEV) {
-            console.log('在开发环境中使用模拟数据');
-            userInfo.value = {
-              username: userStore.username || '测试用户',
-              email: 'test@example.com',
-              created_at: new Date().toLocaleDateString(),
-              avatar: localStorage.getItem('userAvatar') || ''
-            };
-            loading.value = false;
-            return;
-          }
-          
           error.value = '获取用户信息失败，后端API可能不可用';
+          loading.value = false;
+          return;
         }
       }
     }
@@ -153,6 +115,7 @@ const fetchUserData = async () => {
       if (!userData) {
         console.error('返回数据格式异常:', response.data);
         error.value = '返回数据格式不正确';
+        loading.value = false;
         return;
       }
       
@@ -167,13 +130,43 @@ const fetchUserData = async () => {
         created_at: userData.created_at ? new Date(userData.created_at).toLocaleDateString() : ''
       };
       
+      // 处理头像URL，确保是完整的可访问路径
+      const getFullAvatarUrl = (url) => {
+        if (!url) return '/default-avatar.png';
+        
+        // 如果已经是完整URL，直接返回
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
+        }
+        
+        // 如果是以/static/开头的服务器路径，添加服务器地址
+        if (url.startsWith('/static/')) {
+          // 从环境变量或配置中获取API基础URL
+          const baseApiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+          return `${baseApiUrl}${url}`;
+        }
+        
+        // 如果是数据URL或本地blob，直接返回
+        if (url.startsWith('data:') || url.startsWith('blob:')) {
+          return url;
+        }
+        
+        // 默认情况，添加基础URL
+        const baseUrl = window.location.origin;
+        return `${baseUrl}/${url.replace(/^\//, '')}`;
+      };
+      
       // 保存头像URL - 优先使用后端数据，再考虑本地存储
       if (userData.avatar) {
-        userInfo.value.avatar = userData.avatar;
+        const fullAvatarUrl = getFullAvatarUrl(userData.avatar);
+        console.log('获取到用户头像URL:', userData.avatar);
+        console.log('处理后的完整URL:', fullAvatarUrl);
+        userInfo.value.avatar = fullAvatarUrl;
         // 同时保存到本地存储以便后续使用
-        localStorage.setItem('userAvatar', userData.avatar);
+        localStorage.setItem('userAvatar', fullAvatarUrl);
       } else if (!userInfo.value.avatar) {
-        userInfo.value.avatar = localStorage.getItem('userAvatar') || '';
+        const savedAvatarUrl = localStorage.getItem('userAvatar');
+        userInfo.value.avatar = savedAvatarUrl ? getFullAvatarUrl(savedAvatarUrl) : '';
       }
       
       // 更新store中的用户名，确保保持一致
@@ -226,6 +219,7 @@ const handleFileChange = async (event) => {
     
     const token = CookieUtil.getCookie('token');
     try {
+      console.log('开始上传头像到:', getApiUrl('/api/user/upload-avatar'));
       const response = await axios.post(getApiUrl('/api/user/upload-avatar'), formData, {
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -233,17 +227,32 @@ const handleFileChange = async (event) => {
         }
       });
       
+      console.log('头像上传响应:', response.data);
+      
       if (response.data.status === 'success') {
         // 如果后端返回了URL，则使用后端返回的URL
         if (response.data.avatar_url) {
+          console.log('服务器返回的头像URL:', response.data.avatar_url);
+          // 使用服务器返回的完整URL
           userInfo.value.avatar = response.data.avatar_url;
           localStorage.setItem('userAvatar', response.data.avatar_url);
+          console.log('已更新头像URL:', userInfo.value.avatar);
+          // 强制重新渲染头像
+          setTimeout(() => {
+            const avatarImg = document.querySelector('.avatar img');
+            if (avatarImg) {
+              avatarImg.src = response.data.avatar_url + '?t=' + new Date().getTime();
+            }
+          }, 100);
         }
         alert('头像上传成功');
       }
     } catch (err) {
-      console.warn('头像上传到服务器失败，但已保存本地预览', err);
-      // 此处不显示错误提示，因为已经保存了本地预览
+      console.error('头像上传到服务器失败:', err);
+      if (err.response) {
+        console.error('错误详情:', err.response.data);
+      }
+      alert('头像上传失败，但已保存本地预览');
     }
   } catch (err) {
     console.error('处理头像失败', err);
@@ -446,7 +455,7 @@ onMounted(() => {
     <div v-else class="profile-content">
       <div class="avatar-section">
         <div class="avatar">
-          <img :src="userInfo.avatar || '/default-avatar.png'" alt="用户头像" />
+          <img :src="userInfo.avatar ? `${userInfo.avatar}?t=${Date.now()}` : '/default-avatar.png'" alt="用户头像" />
         </div>
         <div class="avatar-actions">
           <button class="change-avatar" @click="triggerFileUpload">

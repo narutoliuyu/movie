@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from app.config.config import Config
 from .extensions import db
@@ -36,18 +36,29 @@ from flask_jwt_extended import JWTManager
 #         }), 500
 
 def create_app():
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='static')
     app.config.from_object(Config)
     
     # 初始化CORS
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:5173", "http://localhost:5174"],
+            "origins": ["http://localhost:5173", "http://localhost:5174", "*"],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "User-Agent"],
             "supports_credentials": True
         }
     })
+    
+    # 确保静态目录存在
+    import os
+    os.makedirs(os.path.join(app.root_path, 'static', 'avatars'), exist_ok=True)
+    
+    # 添加静态文件跨域支持
+    @app.after_request
+    def add_cors_headers(response):
+        if request.path.startswith('/static/'):
+            response.headers['Access-Control-Allow-Origin'] = '*'
+        return response
     
     # 初始化数据库
     db.init_app(app)

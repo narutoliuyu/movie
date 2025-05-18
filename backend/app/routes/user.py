@@ -6,41 +6,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import jwt_required, get_jwt_identity
 import os
 from datetime import datetime
-import functools
 
 user_bp = Blueprint('user', __name__)
 
-# 开发环境装饰器，允许在jwt_required失败时使用测试数据
-def dev_jwt_required(fn):
-    """允许在开发环境中跳过JWT验证的装饰器"""
-    @functools.wraps(fn)  # 保留原始函数的属性
-    def wrapper(*args, **kwargs):
-        try:
-            # 尝试应用原始jwt_required装饰器
-            return jwt_required()(fn)(*args, **kwargs)
-        except Exception as e:
-            # 在开发环境中，如果JWT验证失败，使用测试数据
-            if not current_app.config.get('TESTING') and 'DEV' in request.headers.get('User-Agent', ''):
-                print(f"开发环境：JWT验证失败，使用测试数据, 错误: {str(e)}")
-                # 模拟get_jwt_identity的返回值
-                def mock_get_jwt_identity():
-                    return 1  # 返回测试用户ID
-                import flask_jwt_extended
-                # 临时替换get_jwt_identity函数
-                original_fn = flask_jwt_extended.get_jwt_identity
-                flask_jwt_extended.get_jwt_identity = mock_get_jwt_identity
-                try:
-                    result = fn(*args, **kwargs)
-                    return result
-                finally:
-                    # 恢复原始函数
-                    flask_jwt_extended.get_jwt_identity = original_fn
-            # 在生产环境中正常抛出异常
-            raise e
-    return wrapper
-
 @user_bp.route('/api/users/<int:user_id>', methods=['GET'])
-@dev_jwt_required
+@jwt_required()
 def get_user(user_id):
     try:
         # 验证身份
@@ -54,19 +24,7 @@ def get_user(user_id):
                 'message': '无效的用户ID'
             }), 400
         
-        if jwt_identity != user_id and not current_app.config.get('TESTING'):
-            if 'DEV' in request.headers.get('User-Agent', ''):
-                # 开发环境返回模拟数据
-                return jsonify({
-                    'status': 'success',
-                    'data': {
-                        'id': user_id,
-                        'username': '测试用户',
-                        'email': 'test@example.com',
-                        'created_at': datetime.now().isoformat(),
-                        'avatar': ''
-                    }
-                })
+        if jwt_identity != user_id:
             return jsonify({
                 'status': 'error',
                 'message': '无权访问此用户信息'
@@ -74,18 +32,6 @@ def get_user(user_id):
             
         user = User.query.get(user_id)
         if not user:
-            if 'DEV' in request.headers.get('User-Agent', ''):
-                # 开发环境返回模拟数据
-                return jsonify({
-                    'status': 'success',
-                    'data': {
-                        'id': user_id,
-                        'username': '测试用户',
-                        'email': 'test@example.com',
-                        'created_at': datetime.now().isoformat(),
-                        'avatar': ''
-                    }
-                })
             return jsonify({
                 'status': 'error',
                 'message': '用户不存在'
@@ -93,34 +39,16 @@ def get_user(user_id):
             
         return jsonify({
             'status': 'success',
-            'data': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'created_at': user.created_at,
-                'avatar': user.avatar
-            }
+            'data': user.to_dict()
         })
     except Exception as e:
-        # 开发环境返回模拟数据
-        if 'DEV' in request.headers.get('User-Agent', ''):
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'id': user_id,
-                    'username': '测试用户',
-                    'email': 'test@example.com',
-                    'created_at': datetime.now().isoformat(),
-                    'avatar': ''
-                }
-            })
         return jsonify({
             'status': 'error',
             'message': f'获取用户信息失败: {str(e)}'
         }), 500
 
 @user_bp.route('/api/users', methods=['GET'])
-@dev_jwt_required
+@jwt_required()
 def get_user_by_params():
     try:
         user_id = request.args.get('user_id')
@@ -145,19 +73,7 @@ def get_user_by_params():
                     'message': '无效的用户ID'
                 }), 400
         
-        if jwt_identity != user_id and not current_app.config.get('TESTING'):
-            if 'DEV' in request.headers.get('User-Agent', ''):
-                # 开发环境返回模拟数据
-                return jsonify({
-                    'status': 'success',
-                    'data': {
-                        'id': user_id,
-                        'username': '测试用户',
-                        'email': 'test@example.com',
-                        'created_at': datetime.now().isoformat(),
-                        'avatar': ''
-                    }
-                })
+        if jwt_identity != user_id:
             return jsonify({
                 'status': 'error',
                 'message': '无权访问此用户信息'
@@ -211,7 +127,7 @@ def get_user_by_params():
         }), 500
 
 @user_bp.route('/api/user/profile', methods=['GET'])
-@dev_jwt_required
+@jwt_required()
 def get_user_profile():
     try:
         # 从JWT获取用户ID
@@ -219,18 +135,6 @@ def get_user_profile():
         
         user = User.query.get(user_id)
         if not user:
-            if 'DEV' in request.headers.get('User-Agent', ''):
-                # 开发环境返回模拟数据
-                return jsonify({
-                    'status': 'success',
-                    'data': {
-                        'id': 1,
-                        'username': '测试用户',
-                        'email': 'test@example.com',
-                        'created_at': datetime.now().isoformat(),
-                        'avatar': ''
-                    }
-                })
             return jsonify({
                 'status': 'error',
                 'message': '用户不存在'
@@ -238,34 +142,16 @@ def get_user_profile():
             
         return jsonify({
             'status': 'success',
-            'data': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'created_at': user.created_at,
-                'avatar': user.avatar
-            }
+            'data': user.to_dict()
         })
     except Exception as e:
-        # 开发环境返回模拟数据
-        if 'DEV' in request.headers.get('User-Agent', ''):
-            return jsonify({
-                'status': 'success',
-                'data': {
-                    'id': 1,
-                    'username': '测试用户',
-                    'email': 'test@example.com',
-                    'created_at': datetime.now().isoformat(),
-                    'avatar': ''
-                }
-            })
         return jsonify({
             'status': 'error',
             'message': f'获取用户信息失败: {str(e)}'
         }), 500
 
 @user_bp.route('/api/user/upload-avatar', methods=['POST'])
-@dev_jwt_required
+@jwt_required()
 def upload_avatar():
     if 'avatar' not in request.files:
         return jsonify({
@@ -298,19 +184,28 @@ def upload_avatar():
     file_path = os.path.join(upload_folder, filename)
     file.save(file_path)
     
-    # 更新用户头像URL
-    avatar_url = f"/static/avatars/{filename}"
-    user.avatar = avatar_url
+    # 更新用户头像URL - 使用相对路径存储
+    avatar_relative_url = f"/static/avatars/{filename}"
+    user.avatar = avatar_relative_url
     db.session.commit()
+    
+    # 构建完整URL以返回给前端
+    # 从请求中获取主机和协议
+    host = request.host_url.rstrip('/')
+    avatar_full_url = f"{host}{avatar_relative_url}"
+    
+    print(f"头像保存成功: {file_path}")
+    print(f"头像URL: {avatar_full_url}")
     
     return jsonify({
         'status': 'success',
         'message': '头像上传成功',
-        'avatar_url': avatar_url
+        'avatar_url': avatar_full_url,  # 返回完整URL
+        'relative_url': avatar_relative_url  # 同时返回相对URL
     })
 
 @user_bp.route('/api/user/update-username', methods=['PUT'])
-@dev_jwt_required
+@jwt_required()
 def update_username():
     data = request.json
     if not data or 'username' not in data:
@@ -347,7 +242,7 @@ def update_username():
     })
 
 @user_bp.route('/api/user/change-password', methods=['PUT'])
-@dev_jwt_required
+@jwt_required()
 def change_password():
     data = request.json
     if not data or 'current_password' not in data or 'new_password' not in data:
@@ -382,7 +277,7 @@ def change_password():
     })
 
 @user_bp.route('/api/user/history', methods=['GET'])
-@dev_jwt_required
+@jwt_required()
 def get_user_history():
     # 获取用户ID
     user_id = get_jwt_identity()
@@ -407,7 +302,7 @@ def get_user_history():
     })
 
 @user_bp.route('/api/user/verify-email', methods=['POST'])
-@dev_jwt_required
+@jwt_required()
 def verify_email():
     data = request.json
     if not data or 'email' not in data:

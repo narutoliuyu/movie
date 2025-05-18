@@ -91,6 +91,8 @@ const fetchWatchHistory = async () => {
 };
 
 const handleMovieClick = (movieId) => {
+  // 在进入电影详情页前，保存来源信息
+  sessionStorage.setItem('fromCenterComponent', 'history');
   router.push(`/movie/${movieId}`);
 };
 
@@ -135,12 +137,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="history-container">
+  <div class="history-container history-component">
     <div class="history-header">
       <h2>观看历史</h2>
       <div class="header-actions">
         <button v-if="watchHistory.length > 0" @click="clearHistory" class="clear-btn">
-          <span class="clear-icon">🗑️</span>
+          <img src="../assets/清空.png" alt="清空历史" class="clear-icon">
           清空历史
         </button>
       </div>
@@ -238,6 +240,19 @@ onMounted(() => {
   background: linear-gradient(135deg, rgba(233, 69, 96, 0.2), rgba(233, 69, 96, 0.3));
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(233, 69, 96, 0.2);
+}
+
+.clear-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  opacity: 0.9;
+  transition: transform 0.3s ease;
+}
+
+.clear-btn:hover .clear-icon {
+  transform: rotate(10deg);
+  opacity: 1;
 }
 
 .loading, .empty-history, .error-message {

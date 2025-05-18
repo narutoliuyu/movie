@@ -77,6 +77,13 @@ def clear_search_history():
 @bp.route('/search/rankings', methods=['GET'])
 def get_movie_rankings():
     rankings = MovieRanking.query.order_by(MovieRanking.rank.asc()).limit(8).all()
+    
+    # 添加调试信息
+    print("电影排名列表:")
+    for rank in rankings:
+        movie_info = rank.movie.to_dict() if rank.movie else None
+        print(f"ID: {rank.id}, 电影ID: {rank.movie_id}, 排名: {rank.rank}, 电影名: {movie_info['title'] if movie_info else 'None'}")
+    
     return jsonify({
         'status': 'success',
         'data': [ranking.to_dict() for ranking in rankings]
